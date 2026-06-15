@@ -27,6 +27,7 @@ BASE_PACKAGES=(
   jq
   unzip
   zip
+  snmpd
   ufw
 )
 
@@ -254,6 +255,7 @@ main() {
   run_apt_update
   install_packages "${BASE_PACKAGES[@]}"
   enable_service chrony
+  enable_service snmpd
   install_docker
   install_netbird
   enroll_netbird

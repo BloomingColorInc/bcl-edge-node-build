@@ -2,7 +2,7 @@
 
 ## NetBird Routing + Monitoring + Remote Administration Platform
 
-Version: 1.2
+Version: 1.3
 Target Hardware: HP EliteDesk 800 G4 SFF (or equivalent)
 Target OS: Ubuntu Server 24.04 LTS
 Purpose: Site Edge Infrastructure (VPN, Monitoring, Remote Administration)
@@ -167,6 +167,7 @@ Run the bootstrap script after the operating system is installed and you can rea
 * XFCE, XRDP, and session configuration
 * Portainer Agent deployment
 * Netdata installation
+* SNMP daemon installation for host polling
 * LibreNMS working directory creation
 * Baseline UFW rules for SSH and XRDP
 
@@ -330,17 +331,55 @@ http://SERVER:19999
 
 ---
 
-# 12. Install LibreNMS Poller
+# 12. SNMP Agent and Portainer Agent
 
-Prepared by script:
+The bootstrap script installs and starts the host SNMP daemon (`snmpd`). LibreNMS and other monitoring systems use that service to poll the node.
+
+After the node is reachable over NetBird, edit the SNMP configuration and restrict access to your NetBird subnet.
 
 ```bash
-ls -ld /opt/librenms
+sudo nano /etc/snmp/snmpd.conf
 ```
 
-Deploy the LibreNMS poller container after the node is enrolled and reachable over NetBird.
+Set a read-only community string and permit only your management subnet. A simple starting point looks like this:
 
-Register it with AWS Triad using the polling credentials and site details from your monitoring standard.
+```conf
+agentAddress udp:161
+rocommunity <snmp-community> <netbird-subnet>
+sysLocation Edge node
+sysContact netadmin
+```
+
+Then restart the service and make sure it starts on boot:
+
+```bash
+sudo systemctl restart snmpd
+sudo systemctl enable snmpd
+```
+
+If UFW is enabled, allow SNMP from the same subnet only:
+
+```bash
+sudo ufw allow from <netbird-subnet> to any port 161 proto udp
+```
+
+The repository also includes a Compose file for the Portainer Agent container.
+
+Run it from the repository root:
+
+```bash
+sudo docker compose up -d
+```
+
+Verify:
+
+```bash
+docker compose ps
+docker ps --filter name=portainer-agent
+systemctl status snmpd
+```
+
+Use LibreNMS to add this node as a polled device after SNMP is reachable over NetBird.
 
 ---
 
