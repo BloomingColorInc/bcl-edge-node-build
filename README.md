@@ -1,13 +1,13 @@
 # BloomingEdge Node Build Guide
 
-## NetBird Routing + Monitoring + Remote Administration Platform
+## Zero-Trust VPN Routing + Monitoring + Remote Access Platform
 
 ![BloomingEdge Network](img/BloomingEdge_Network.png)
 
-Version: 1.3
+Version: 0.1 (beta)
 Target Hardware: HP EliteDesk 800 G4 SFF (or equivalent)
 Target OS: Ubuntu Server 24.04 LTS
-Purpose: Site Edge Infrastructure (VPN, Monitoring, Remote Administration)
+Purpose: Site Edge Infrastructure (Intersite Connectivity, Remote Access, Network Device Monitoring)
 
 Read through the entire document before attempting any of the steps so you understand the full workflow, prerequisites, and manual follow-up items. This guide assumes you will use SSH for remote management after the initial installation.
 
@@ -15,7 +15,7 @@ Read through the entire document before attempting any of the steps so you under
 
 # 1. Overview
 
-BloomingEdge Nodes provide localized network infrastructure services at each site.
+BloomingEdge Nodes provide localized edge infrastructure for intersite connectivity, secure remote access, and network device monitoring at each site.
 
 Primary functions:
 
