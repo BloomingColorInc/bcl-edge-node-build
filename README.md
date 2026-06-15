@@ -2,12 +2,12 @@
 
 ## NetBird Routing + Monitoring + Remote Administration Platform
 
-Version: 0.2 (Beta)
+Version: 1.2
 Target Hardware: HP EliteDesk 800 G4 SFF (or equivalent)
 Target OS: Ubuntu Server 24.04 LTS
 Purpose: Site Edge Infrastructure (VPN, Monitoring, Remote Administration)
 
-Read through the entire document before attempting any of the steps so you understand the full workflow, prerequisites, and manual follow-up items.
+Read through the entire document before attempting any of the steps so you understand the full workflow, prerequisites, and manual follow-up items. This guide assumes you will use SSH for remote management after the initial installation.
 
 ---
 
@@ -103,9 +103,7 @@ Create the installer USB on a Windows workstation:
 6. Accept the Rufus defaults for partition scheme and write options unless site policy requires otherwise.
 7. Start the write process and wait for Rufus to complete.
 
-Boot the edge node from the USB drive and install:
-
-Ubuntu Server 24.04.x LTS
+Boot the edge node from the USB drive and start the Ubuntu Server 24.04.x LTS installer.
 
 Installation choices:
 
@@ -115,9 +113,10 @@ Network:
 
 Storage:
 
-* Use the installer defaults
+* Use the guided installer defaults
 * Accept the default partitioning layout for the target drive
 * In most cases the target drive is the built-in 1TB SSD
+* Only change this if your site has an explicit storage requirement
 
 Packages:
 
@@ -133,6 +132,8 @@ Create administrator:
 netadmin
 
 Reboot.
+
+After the initial installation, SSH is available for remote management and for copying and pasting the commands in this guide from another machine.
 
 ---
 
@@ -158,7 +159,7 @@ The repository is hosted in the `bloomingcolorinc` GitHub organization.
 
 # 6. Run the Bootstrap Script
 
-The bootstrap script automates the repeatable host configuration work:
+Run the bootstrap script after the operating system is installed and you can reach the node over SSH. It handles the repeatable parts of the build:
 
 * OS package refresh and base utility installation
 * Docker installation and enablement
@@ -169,7 +170,7 @@ The bootstrap script automates the repeatable host configuration work:
 * LibreNMS working directory creation
 * Baseline UFW rules for SSH and XRDP
 
-Run:
+Run the script from the cloned repository:
 
 ```bash
 sudo EDGE_ADMIN_USER=netadmin \
@@ -251,7 +252,7 @@ sudo netplan apply
 
 # 8. Join NetBird
 
-The bootstrap script can enroll the node automatically when you provide a NetBird setup key.
+The bootstrap script can enroll the node automatically when you provide a NetBird setup key. That step registers the machine as a NetBird peer, but it does not yet make it the routing endpoint for your site.
 
 For a bare metal server or routing peer, create the key from the NetBird management dashboard:
 
@@ -269,7 +270,7 @@ NETBIRD_HOSTNAME=bcl-edge-lom-01 \
 bash scripts/bootstrap-edge-node.sh
 ```
 
-After the peer appears in the dashboard, create the network route or exit node that points at it and assign the appropriate distribution group or auto-apply setting. That dashboard step is what makes the peer act as the routing endpoint for your site network.
+After the peer appears in the dashboard, create the network route or exit node that points at it and assign the appropriate distribution group or auto-apply setting. Use a network route for site-to-site access to private subnets, or an exit node if you want the peer to carry internet-bound traffic for connected clients. That dashboard step is what makes the peer act as the routing endpoint for your site network.
 
 Verify:
 
@@ -293,6 +294,8 @@ The bootstrap script installs XFCE, LightDM, XRDP, configures the admin user's X
 
 If you skip desktop installation by setting `INSTALL_DESKTOP=no`, complete the GUI and XRDP setup manually before remote access testing.
 
+The only reason to use the desktop is emergency or out-of-band administration. Normal day-to-day management should happen over SSH and NetBird.
+
 Test:
 
 Windows:
@@ -307,7 +310,7 @@ NetBird-IP
 
 # 10. Portainer Agent
 
-The bootstrap script deploys the Portainer Agent container by default.
+The bootstrap script deploys the Portainer Agent container by default so the node can be managed from Portainer without a separate install step.
 
 Verify:
 
@@ -319,7 +322,7 @@ docker ps --filter name=portainer-agent
 
 # 11. Netdata
 
-The bootstrap script installs Netdata by default.
+The bootstrap script installs Netdata by default so you can confirm system health immediately after the build.
 
 Verify:
 
@@ -335,9 +338,9 @@ Prepared by script:
 ls -ld /opt/librenms
 ```
 
-Deploy poller container.
+Deploy the LibreNMS poller container after the node is enrolled and reachable over NetBird.
 
-Register with AWS Triad.
+Register it with AWS Triad using the polling credentials and site details from your monitoring standard.
 
 ---
 
@@ -349,6 +352,8 @@ The bootstrap script enables UFW and allows:
 * TCP 3389 for XRDP
 
 Restrict management to NetBird.
+
+If your site uses additional management services, add only the ports you actually need.
 
 ---
 
@@ -375,19 +380,15 @@ Test:
 
 # 15. Production Cutover
 
-Add node as Secondary.
+Add the node as a secondary routing peer first.
 
-Validate.
+Validate that traffic flows correctly.
 
-Promote:
+Promote the node by assigning it metric 10.
 
-Metric 10
+Keep legacy peers at metric 100 so they remain secondary.
 
-Retain legacy peers:
-
-Metric 100
-
-Verify failover.
+Verify failover before you cut over production traffic.
 
 ---
 
