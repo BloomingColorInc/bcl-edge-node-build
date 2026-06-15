@@ -111,7 +111,7 @@ Installation choices:
 
 Network:
 
-* Configure Static IP
+* Configure initial networking (DHCP or Static IP)
 
 Storage:
 
@@ -151,7 +151,7 @@ sudo apt install -y git
 Clone the public repository:
 
 ```bash
-git clone https://github.com/bloomingcolorinc/bcl-edge-computer-config.git
+git clone https://github.com/bloomingcolorinc/bcl-edge-node-build.git
 cd bcl-edge-computer-config
 ```
 
