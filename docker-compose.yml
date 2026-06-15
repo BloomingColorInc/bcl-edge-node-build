@@ -1,4 +1,69 @@
 services:
+  db:
+    image: mariadb:10.11
+    container_name: librenms-db
+    restart: unless-stopped
+    command:
+      - mysqld
+      - --innodb-file-per-table=1
+      - --lower-case-table-names=0
+    environment:
+      TZ: ${TZ:-UTC}
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_DATABASE: ${DB_NAME:-librenms}
+      MARIADB_USER: ${DB_USER:-librenms}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-change-me}
+    volumes:
+      - librenms-db:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: librenms-redis
+    restart: unless-stopped
+
+  librenms:
+    image: librenms/librenms:latest
+    container_name: librenms
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      TZ: ${TZ:-UTC}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-librenms}
+      DB_USER: ${DB_USER:-librenms}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    volumes:
+      - librenms-data:/data
+
+  dispatcher:
+    image: librenms/librenms:latest
+    container_name: librenms-dispatcher
+    restart: unless-stopped
+    depends_on:
+      - librenms
+      - db
+      - redis
+    environment:
+      TZ: ${TZ:-UTC}
+      SIDECAR_DISPATCHER: "1"
+      DISPATCHER_NODE_ID: dispatcher1
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-librenms}
+      DB_USER: ${DB_USER:-librenms}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    volumes:
+      - librenms-data:/data
+
   portainer-agent:
     image: portainer/agent:latest
     container_name: portainer-agent
@@ -8,3 +73,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes
+
+volumes:
+  librenms-data:
+  librenms-db:
