@@ -2,7 +2,7 @@
 
 ## NetBird Routing + Monitoring + Remote Administration Platform
 
-Version: 1.0
+Version: 1.1
 Target Hardware: HP EliteDesk 800 G4 SFF (or equivalent)
 Target OS: Ubuntu Server 24.04 LTS
 Purpose: Site Edge Infrastructure (VPN, Monitoring, Remote Administration)
@@ -87,9 +87,19 @@ Save and reboot.
 
 # 4. Install Ubuntu Server
 
-Install:
+Create the installer USB on a Windows workstation:
 
-Ubuntu Server 24.04 LTS
+1. Download the current Ubuntu Server 24.04.x ISO.
+2. Insert a USB flash drive with at least 8GB capacity.
+3. Open Rufus.
+4. Select the USB device.
+5. Select the Ubuntu Server 24.04.x ISO.
+6. Accept the Rufus defaults for partition scheme and write options unless site policy requires otherwise.
+7. Start the write process and wait for Rufus to complete.
+
+Boot the edge node from the USB drive and install:
+
+Ubuntu Server 24.04.x LTS
 
 Installation choices:
 
@@ -99,15 +109,9 @@ Network:
 
 Storage:
 
-* Manual
-
-Suggested partitions:
-
-/boot      2GB
-swap       16GB
-/          150GB
-/var       300GB
-/opt       Remaining
+* Use the installer defaults
+* Accept the default partitioning layout for the target drive
+* In most cases the target drive is the built-in 1TB SSD
 
 Packages:
 
@@ -126,44 +130,68 @@ Reboot.
 
 ---
 
-# 5. Initial OS Configuration
+# 5. Clone the Repository
 
-Update:
+If `git` is not already installed:
 
 ```bash
 sudo apt update
-sudo apt full-upgrade -y
-sudo reboot
+sudo apt install -y git
 ```
 
-Install utilities:
+Clone the public repository:
 
 ```bash
-sudo apt install \
-curl \
-wget \
-git \
-htop \
-nano \
-vim \
-net-tools \
-chrony \
-lm-sensors \
-jq \
-unzip \
-zip \
-ufw
+git clone https://github.com/bloomingcolorinc/bcl-edge-computer-config.git
+cd bcl-edge-computer-config
 ```
 
-Enable time sync:
-
-```bash
-sudo systemctl enable chrony
-```
+The repository is hosted in the `bloomingcolorinc` GitHub organization.
 
 ---
 
-# 6. Configure Networking
+# 6. Run the Bootstrap Script
+
+The bootstrap script automates the repeatable host configuration work:
+
+* OS package refresh and base utility installation
+* Docker installation and enablement
+* NetBird package installation
+* XFCE, XRDP, and session configuration
+* Portainer Agent deployment
+* Netdata installation
+* LibreNMS working directory creation
+* Baseline UFW rules for SSH and XRDP
+
+Run:
+
+```bash
+sudo EDGE_ADMIN_USER=netadmin bash scripts/bootstrap-edge-node.sh
+```
+
+Optional environment flags:
+
+```bash
+sudo EDGE_ADMIN_USER=netadmin \
+INSTALL_DESKTOP=yes \
+INSTALL_NETDATA=yes \
+INSTALL_PORTAINER=yes \
+CONFIGURE_UFW=yes \
+bash scripts/bootstrap-edge-node.sh
+```
+
+Defaults:
+
+* `EDGE_ADMIN_USER=netadmin`
+* `INSTALL_DESKTOP=yes`
+* `INSTALL_NETDATA=yes`
+* `INSTALL_PORTAINER=yes`
+* `CONFIGURE_UFW=yes`
+* `ENABLE_FULL_UPGRADE=yes`
+
+---
+
+# 7. Configure Networking
 
 Identify interfaces:
 
@@ -208,41 +236,9 @@ sudo netplan apply
 
 ---
 
-# 7. Install Docker
+# 8. Join NetBird
 
-Install:
-
-```bash
-curl -fsSL https://get.docker.com | sudo sh
-```
-
-Add user:
-
-```bash
-sudo usermod -aG docker netadmin
-```
-
-Enable:
-
-```bash
-sudo systemctl enable docker
-```
-
-Verify:
-
-```bash
-docker ps
-```
-
----
-
-# 8. Install NetBird
-
-Install:
-
-```bash
-curl -fsSL https://pkgs.netbird.io/install.sh | sudo bash
-```
+The bootstrap script installs the NetBird package, but site enrollment remains manual.
 
 Join:
 
@@ -266,80 +262,11 @@ Existing peers:
 
 ---
 
-# 9. Install Lightweight GUI
+# 9. GUI and XRDP
 
-Install XFCE:
+The bootstrap script installs XFCE, LightDM, XRDP, configures the admin user's XFCE session, updates `/etc/xrdp/startwm.sh`, and enables the relevant services.
 
-```bash
-sudo apt install \
-xfce4 \
-xfce4-goodies \
-lightdm \
-xorg \
-dbus-x11 \
-xubuntu-default-settings
-```
-
-Select:
-
-lightdm
-
-Configure:
-
-```bash
-echo startxfce4 > ~/.xsession
-chmod +x ~/.xsession
-```
-
-Restart:
-
-```bash
-sudo systemctl restart display-manager
-```
-
----
-
-# 10. Configure XRDP
-
-Install:
-
-```bash
-sudo apt install \
-xrdp \
-xorgxrdp
-```
-
-Configure session:
-
-```bash
-echo xfce4-session > ~/.xsession
-```
-
-Edit:
-
-```bash
-sudo nano /etc/xrdp/startwm.sh
-```
-
-Replace final lines with:
-
-```bash
-export DESKTOP_SESSION=xfce
-export XDG_CURRENT_DESKTOP=XFCE
-exec startxfce4
-```
-
-Add permissions:
-
-```bash
-sudo adduser xrdp ssl-cert
-```
-
-Restart:
-
-```bash
-sudo systemctl restart xrdp
-```
+If you skip desktop installation by setting `INSTALL_DESKTOP=no`, complete the GUI and XRDP setup manually before remote access testing.
 
 Test:
 
@@ -353,28 +280,21 @@ NetBird-IP
 
 ---
 
-# 11. Install Portainer Agent
+# 10. Portainer Agent
 
-Deploy:
+The bootstrap script deploys the Portainer Agent container by default.
+
+Verify:
 
 ```bash
-docker run -d \
---restart=always \
--p 9001:9001 \
--v /var/run/docker.sock:/var/run/docker.sock \
--v /var/lib/docker/volumes:/var/lib/docker/volumes \
-portainer/agent
+docker ps --filter name=portainer-agent
 ```
 
 ---
 
-# 12. Install Netdata
+# 11. Netdata
 
-Install:
-
-```bash
-bash <(curl -Ss https://my-netdata.io/kickstart.sh)
-```
+The bootstrap script installs Netdata by default.
 
 Verify:
 
@@ -382,12 +302,12 @@ http://SERVER:19999
 
 ---
 
-# 13. Install LibreNMS Poller
+# 12. Install LibreNMS Poller
 
-Create:
+Prepared by script:
 
 ```bash
-mkdir -p /opt/librenms
+ls -ld /opt/librenms
 ```
 
 Deploy poller container.
@@ -396,21 +316,18 @@ Register with AWS Triad.
 
 ---
 
-# 14. Firewall
+# 13. Firewall
 
-Allow:
+The bootstrap script enables UFW and allows:
 
-```bash
-sudo ufw allow ssh
-sudo ufw allow 3389/tcp
-sudo ufw enable
-```
+* SSH
+* TCP 3389 for XRDP
 
 Restrict management to NetBird.
 
 ---
 
-# 15. Validation
+# 14. Validation
 
 Verify:
 
@@ -418,6 +335,7 @@ Verify:
 docker ps
 netbird status
 systemctl status xrdp
+systemctl status chrony
 ```
 
 Test:
@@ -430,7 +348,7 @@ Test:
 
 ---
 
-# 16. Production Cutover
+# 15. Production Cutover
 
 Add node as Secondary.
 
