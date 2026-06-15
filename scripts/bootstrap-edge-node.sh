@@ -4,6 +4,8 @@ set -euo pipefail
 
 DEFAULT_ADMIN_USER="${SUDO_USER:-netadmin}"
 ADMIN_USER="${EDGE_ADMIN_USER:-$DEFAULT_ADMIN_USER}"
+NETBIRD_SETUP_KEY="${NETBIRD_SETUP_KEY:-}"
+NETBIRD_HOSTNAME="${NETBIRD_HOSTNAME:-$(hostname -s)}"
 INSTALL_DESKTOP="${INSTALL_DESKTOP:-yes}"
 INSTALL_NETDATA="${INSTALL_NETDATA:-yes}"
 INSTALL_PORTAINER="${INSTALL_PORTAINER:-yes}"
@@ -98,6 +100,16 @@ install_netbird() {
 
   log "Installing NetBird"
   curl -fsSL https://pkgs.netbird.io/install.sh | bash
+}
+
+enroll_netbird() {
+  if [[ -z "$NETBIRD_SETUP_KEY" ]]; then
+    log "NetBird setup key not supplied; skipping enrollment"
+    return
+  fi
+
+  log "Enrolling NetBird peer as $NETBIRD_HOSTNAME"
+  netbird up --setup-key "$NETBIRD_SETUP_KEY" --hostname "$NETBIRD_HOSTNAME"
 }
 
 configure_desktop() {
@@ -225,10 +237,13 @@ Bootstrap complete.
 
 Manual follow-up is still required for:
   - netplan configuration and validation
-  - sudo netbird up and route metric assignment
+  - NetBird route or exit-node creation in the dashboard
   - LibreNMS poller deployment and registration
   - site-specific firewall restrictions over NetBird
   - final service validation and reboot if package upgrades require it
+
+If NETBIRD_SETUP_KEY was not supplied, rerun the script with a setup key to
+enroll the node as a NetBird peer automatically.
 
 If $ADMIN_USER was added to the docker group, log out and back in before using Docker without sudo.
 EOF
@@ -241,6 +256,7 @@ main() {
   enable_service chrony
   install_docker
   install_netbird
+  enroll_netbird
   configure_desktop
   install_portainer_agent
   install_netdata

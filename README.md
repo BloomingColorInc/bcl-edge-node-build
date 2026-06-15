@@ -2,10 +2,12 @@
 
 ## NetBird Routing + Monitoring + Remote Administration Platform
 
-Version: 1.1
+Version: 0.2 (Beta)
 Target Hardware: HP EliteDesk 800 G4 SFF (or equivalent)
 Target OS: Ubuntu Server 24.04 LTS
 Purpose: Site Edge Infrastructure (VPN, Monitoring, Remote Administration)
+
+Read through the entire document before attempting any of the steps so you understand the full workflow, prerequisites, and manual follow-up items.
 
 ---
 
@@ -58,6 +60,10 @@ Temporary:
 # 3. BIOS Configuration
 
 Update BIOS before installing Linux.
+
+If this is a new or refurbished PC that shipped with Windows pre-installed, the easiest way to get the latest BIOS or firmware update is usually through Windows Update before you wipe the machine.
+
+Firmware updates are recommended before installation, regardless of the system's prior operating system.
 
 Recommended settings:
 
@@ -156,7 +162,7 @@ The bootstrap script automates the repeatable host configuration work:
 
 * OS package refresh and base utility installation
 * Docker installation and enablement
-* NetBird package installation
+* NetBird package installation and enrollment when a setup key is provided
 * XFCE, XRDP, and session configuration
 * Portainer Agent deployment
 * Netdata installation
@@ -166,13 +172,18 @@ The bootstrap script automates the repeatable host configuration work:
 Run:
 
 ```bash
-sudo EDGE_ADMIN_USER=netadmin bash scripts/bootstrap-edge-node.sh
+sudo EDGE_ADMIN_USER=netadmin \
+NETBIRD_SETUP_KEY=<setup-key> \
+NETBIRD_HOSTNAME=bcl-edge-lom-01 \
+bash scripts/bootstrap-edge-node.sh
 ```
 
 Optional environment flags:
 
 ```bash
 sudo EDGE_ADMIN_USER=netadmin \
+NETBIRD_SETUP_KEY=<setup-key> \
+NETBIRD_HOSTNAME=bcl-edge-lom-01 \
 INSTALL_DESKTOP=yes \
 INSTALL_NETDATA=yes \
 INSTALL_PORTAINER=yes \
@@ -183,6 +194,8 @@ bash scripts/bootstrap-edge-node.sh
 Defaults:
 
 * `EDGE_ADMIN_USER=netadmin`
+* `NETBIRD_SETUP_KEY=<setup-key>` for unattended NetBird enrollment
+* `NETBIRD_HOSTNAME=bcl-edge-lom-01` or `bcl-edge-lou-01`
 * `INSTALL_DESKTOP=yes`
 * `INSTALL_NETDATA=yes`
 * `INSTALL_PORTAINER=yes`
@@ -238,13 +251,25 @@ sudo netplan apply
 
 # 8. Join NetBird
 
-The bootstrap script installs the NetBird package, but site enrollment remains manual.
+The bootstrap script can enroll the node automatically when you provide a NetBird setup key.
 
-Join:
+For a bare metal server or routing peer, create the key from the NetBird management dashboard:
+
+1. Sign in to the NetBird admin console.
+2. Open Peers → Servers.
+3. Select Add Peer or Generate Key.
+4. Copy the generated one-off key.
+
+Run the bootstrap script with that key so the machine enrolls as a NetBird peer:
 
 ```bash
-sudo netbird up
+sudo EDGE_ADMIN_USER=netadmin \
+NETBIRD_SETUP_KEY=<setup-key> \
+NETBIRD_HOSTNAME=bcl-edge-lom-01 \
+bash scripts/bootstrap-edge-node.sh
 ```
+
+After the peer appears in the dashboard, create the network route or exit node that points at it and assign the appropriate distribution group or auto-apply setting. That dashboard step is what makes the peer act as the routing endpoint for your site network.
 
 Verify:
 
