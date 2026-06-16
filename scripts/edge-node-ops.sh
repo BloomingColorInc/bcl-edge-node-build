@@ -433,6 +433,11 @@ run_compose() {
     return 1
   fi
 
+  if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "Error: Compose file not found at: $COMPOSE_FILE"
+    return 1
+  fi
+
   if [[ "$COMPOSE_CMD" == "docker compose" ]]; then
     run_with_privilege docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
   else
@@ -441,11 +446,6 @@ run_compose() {
 }
 
 check_required_files() {
-  if [[ ! -f "$COMPOSE_FILE" ]]; then
-    fail "Compose file not found at: $COMPOSE_FILE"
-    exit 1
-  fi
-
   if [[ ! -f "$BOOTSTRAP_SCRIPT" ]]; then
     fail "Bootstrap script not found at: $BOOTSTRAP_SCRIPT"
     exit 1
@@ -801,7 +801,11 @@ quick_health_check() {
 
   echo
   say "Docker Containers"
-  run_with_privilege docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+  if command_exists docker; then
+    run_with_privilege docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+  else
+    warn "docker CLI not installed"
+  fi
 
   echo
   say "NetBird"
@@ -814,15 +818,6 @@ quick_health_check() {
 
 main_menu() {
   check_required_files
-
-  if ! require_tool docker "Install Docker first (bootstrap script handles this)."; then
-    exit 1
-  fi
-
-  if [[ -z "$COMPOSE_CMD" ]]; then
-    fail "Docker Compose is required (docker compose plugin or docker-compose binary)."
-    exit 1
-  fi
 
   while true; do
     [[ "${MAIN_MENU_REQUESTED}" == "1" ]] && MAIN_MENU_REQUESTED=0
