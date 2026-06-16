@@ -443,6 +443,40 @@ docker ps --filter name=portainer-agent
 
 The bootstrap script installs and starts the host SNMP daemon (`snmpd`). LibreNMS and other monitoring systems use that service to poll the node.
 
+## Recommended Poller Deployment (CLI Menu)
+
+Deploy the distributed LibreNMS poller agent from the CLI menu:
+
+```bash
+sudo bash scripts/edge-node-ops.sh
+```
+
+Menu path:
+
+1. `4) LibreNMS Poller Agent`
+2. `2) Deploy/Re-Deploy Poller Agent`
+
+During deployment, provide the AWS Triad LibreNMS backend values:
+
+* `DB_HOST` / `DB_PORT`
+* `DB_NAME` / `DB_USER` / `DB_PASSWORD`
+* `REDIS_HOST` / `REDIS_PORT`
+
+The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:latest` with distributed dispatcher mode enabled.
+
+## How It Talks to AWS Triad LibreNMS/SNMP
+
+Communication flow:
+
+1. NetBird provides the encrypted overlay path between this edge node and AWS Triad.
+2. The edge poller agent establishes outbound connections to AWS Triad LibreNMS backend services (MariaDB and Redis) over NetBird.
+3. AWS Triad LibreNMS scheduler/dispatcher coordination is exchanged through those DB/Redis channels.
+4. The edge poller performs SNMP polling (`UDP/161`) against local site devices and edge infrastructure reachable from this node.
+5. Polling results, discoveries, and state updates are written back to AWS Triad LibreNMS through the same NetBird-protected backend channels.
+6. Separately, the local host `snmpd` service allows AWS Triad LibreNMS to poll this edge node itself (also over NetBird).
+
+Operationally, this means AWS Triad remains the source of truth for monitoring data and alerting, while the edge poller executes SNMP collection close to site devices.
+
 After the node is reachable over NetBird, edit the SNMP configuration and restrict access to your NetBird subnet.
 
 ```bash

@@ -9,6 +9,8 @@ COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-edge-node}"
 BOOTSTRAP_SCRIPT="${BOOTSTRAP_SCRIPT:-$REPO_ROOT/scripts/bootstrap-edge-node.sh}"
 EDGE_NODE_OPS_DASHBOARD_CLEAR="${EDGE_NODE_OPS_DASHBOARD_CLEAR:-1}"
 EDGE_NODE_OPS_PANEL_SPACING_LINES="${EDGE_NODE_OPS_PANEL_SPACING_LINES:-1}"
+LIBRENMS_POLLER_CONTAINER_NAME="${LIBRENMS_POLLER_CONTAINER_NAME:-librenms-dispatcher-agent}"
+LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-librenms/librenms:latest}"
 MAIN_MENU_REQUESTED=0
 
 if [[ -t 0 ]]; then
@@ -756,6 +758,176 @@ netbird_menu() {
   done
 }
 
+librenms_poller_status() {
+  ui_clear
+  say "LibreNMS Poller Agent Status"
+
+  if ! command_exists docker; then
+    warn "docker CLI not installed"
+    return
+  fi
+
+  run_with_privilege docker ps -a --filter "name=${LIBRENMS_POLLER_CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+}
+
+librenms_poller_deploy() {
+  if ! command_exists docker; then
+    warn "docker CLI not installed"
+    return
+  fi
+
+  local container_name image_name node_id tz
+  local db_host db_port db_name db_user db_password
+  local redis_host redis_port
+
+  container_name="$LIBRENMS_POLLER_CONTAINER_NAME"
+  image_name="$LIBRENMS_POLLER_IMAGE"
+  node_id="$(hostname -s)-poller"
+  tz="UTC"
+  db_port="3306"
+  redis_port="6379"
+
+  ui_clear
+  ui_panel_compact "LibreNMS Poller Deployment" "magenta" \
+    "Deploys a distributed LibreNMS dispatcher/poller container." \
+    "Use AWS Triad LibreNMS DB/Redis endpoints reachable over NetBird."
+
+  read -r -p "Container name [${container_name}]: " container_name
+  container_name="$(trim "$container_name")"
+  [[ -n "$container_name" ]] || container_name="$LIBRENMS_POLLER_CONTAINER_NAME"
+
+  read -r -p "Image [${image_name}]: " image_name
+  image_name="$(trim "$image_name")"
+  [[ -n "$image_name" ]] || image_name="$LIBRENMS_POLLER_IMAGE"
+
+  read -r -p "DISPATCHER_NODE_ID [${node_id}]: " node_id
+  node_id="$(trim "$node_id")"
+  [[ -n "$node_id" ]] || node_id="$(hostname -s)-poller"
+
+  read -r -p "TZ [${tz}]: " tz
+  tz="$(trim "$tz")"
+  [[ -n "$tz" ]] || tz="UTC"
+
+  read -r -p "AWS Triad LibreNMS DB_HOST: " db_host
+  db_host="$(trim "$db_host")"
+
+  read -r -p "DB_PORT [${db_port}]: " db_port
+  db_port="$(trim "$db_port")"
+  [[ -n "$db_port" ]] || db_port="3306"
+
+  read -r -p "DB_NAME: " db_name
+  db_name="$(trim "$db_name")"
+
+  read -r -p "DB_USER: " db_user
+  db_user="$(trim "$db_user")"
+
+  read -r -s -p "DB_PASSWORD: " db_password
+  echo
+  db_password="$(trim "$db_password")"
+
+  read -r -p "AWS Triad Redis REDIS_HOST: " redis_host
+  redis_host="$(trim "$redis_host")"
+
+  read -r -p "REDIS_PORT [${redis_port}]: " redis_port
+  redis_port="$(trim "$redis_port")"
+  [[ -n "$redis_port" ]] || redis_port="6379"
+
+  if [[ -z "$db_host" || -z "$db_name" || -z "$db_user" || -z "$db_password" || -z "$redis_host" ]]; then
+    warn "DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, and REDIS_HOST are required."
+    return
+  fi
+
+  if run_with_privilege docker ps -a --format '{{.Names}}' | grep -Fxq "$container_name"; then
+    if ! confirm "Container '${container_name}' exists. Recreate it with new settings?"; then
+      warn "Cancelled."
+      return
+    fi
+    run_with_privilege docker rm -f "$container_name" >/dev/null 2>&1 || true
+  fi
+
+  run_with_privilege mkdir -p /opt/librenms
+
+  say "Deploying LibreNMS poller agent container..."
+  run_with_privilege docker run -d \
+    --name "$container_name" \
+    --restart unless-stopped \
+    -e TZ="$tz" \
+    -e SIDECAR_DISPATCHER="1" \
+    -e DISPATCHER_NODE_ID="$node_id" \
+    -e DB_HOST="$db_host" \
+    -e DB_PORT="$db_port" \
+    -e DB_NAME="$db_name" \
+    -e DB_USER="$db_user" \
+    -e DB_PASSWORD="$db_password" \
+    -e REDIS_HOST="$redis_host" \
+    -e REDIS_PORT="$redis_port" \
+    -v /opt/librenms:/data \
+    "$image_name" >/dev/null
+
+  LIBRENMS_POLLER_CONTAINER_NAME="$container_name"
+  ok "LibreNMS poller agent deployed."
+  run_with_privilege docker ps -a --filter "name=${LIBRENMS_POLLER_CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+}
+
+librenms_poller_logs() {
+  if ! command_exists docker; then
+    warn "docker CLI not installed"
+    return
+  fi
+
+  run_with_privilege docker logs --tail 150 "$LIBRENMS_POLLER_CONTAINER_NAME"
+}
+
+librenms_poller_remove() {
+  if ! command_exists docker; then
+    warn "docker CLI not installed"
+    return
+  fi
+
+  if ! run_with_privilege docker ps -a --format '{{.Names}}' | grep -Fxq "$LIBRENMS_POLLER_CONTAINER_NAME"; then
+    warn "Poller container '${LIBRENMS_POLLER_CONTAINER_NAME}' not found."
+    return
+  fi
+
+  if ! confirm "Remove LibreNMS poller container '${LIBRENMS_POLLER_CONTAINER_NAME}'?"; then
+    warn "Cancelled."
+    return
+  fi
+
+  run_with_privilege docker rm -f "$LIBRENMS_POLLER_CONTAINER_NAME"
+  ok "LibreNMS poller container removed."
+}
+
+librenms_poller_menu() {
+  while true; do
+    [[ "${MAIN_MENU_REQUESTED}" == "1" ]] && return 0
+    ui_clear
+    ui_panel_compact "LibreNMS Poller Agent" "magenta" \
+      "Manage distributed poller deployment for AWS Triad LibreNMS." \
+      "Default container: ${LIBRENMS_POLLER_CONTAINER_NAME}"
+    show_node_snapshot_lines
+    ui_panel "Actions" "bright_magenta" \
+      "1) Poller Container Status" \
+      "2) Deploy/Re-Deploy Poller Agent" \
+      "3) View Poller Logs" \
+      "4) Remove Poller Agent"
+    ui_nav_panel_full
+
+    local choice
+    read -r -p "Select action > " choice
+    case "$choice" in
+      1) if ! librenms_poller_status; then warn "Status check failed."; fi; pause ;;
+      2) if ! librenms_poller_deploy; then warn "Poller deploy failed."; fi; pause ;;
+      3) if ! librenms_poller_logs; then warn "Log retrieval failed."; fi; pause ;;
+      4) if ! librenms_poller_remove; then warn "Poller removal failed."; fi; pause ;;
+      b|B) return ;;
+      m|M|h|H) request_main_menu; return ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid choice"; pause ;;
+    esac
+  done
+}
+
 quick_health_check() {
   ui_clear
   say "Service Health"
@@ -778,6 +950,10 @@ quick_health_check() {
     echo
     say "Portainer Agent (all states)"
     run_with_privilege docker ps -a --filter name=portainer-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+
+    echo
+    say "LibreNMS Poller Agent (all states)"
+    run_with_privilege docker ps -a --filter "name=${LIBRENMS_POLLER_CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
   else
     warn "docker CLI not installed"
   fi
@@ -803,8 +979,9 @@ main_menu() {
       "1) Run Bootstrap Wizard" \
       "2) Docker Stack Operations" \
       "3) NetBird Operations" \
-      "4) Quick Health Check" \
-      "5) Run Bootstrap in Repair Mode"
+      "4) LibreNMS Poller Agent" \
+      "5) Quick Health Check" \
+      "6) Run Bootstrap in Repair Mode"
 
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
@@ -814,8 +991,9 @@ main_menu() {
       1) if ! run_bootstrap_wizard; then warn "Bootstrap wizard failed."; fi; pause ;;
       2) docker_menu ;;
       3) netbird_menu ;;
-      4) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
-      5) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
+      4) librenms_poller_menu ;;
+      5) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
+      6) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
     esac
