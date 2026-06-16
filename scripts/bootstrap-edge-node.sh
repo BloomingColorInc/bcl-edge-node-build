@@ -205,54 +205,79 @@ configure_default_browser_for_user() {
   local user_name="$1"
   local user_home="$2"
   local helpers_rc="$user_home/.config/xfce4/helpers.rc"
+  local exo_xml="$user_home/.config/xfce4/xfconf/xfce-perchannel-xml/exo.xml"
   local applications_dir="$user_home/.config"
   local mimeapps_list="$applications_dir/mimeapps.list"
-  local xfce_helper_dir="$user_home/.local/share/xfce4/helpers"
-  local xfce_helper_file="$xfce_helper_dir/custom-google-chrome.desktop"
+  local local_bin_dir="$user_home/.local/bin"
+  local local_applications_dir="$user_home/.local/share/applications"
+  local browser_wrapper_script="$local_bin_dir/bcl-chrome-browser"
+  local browser_desktop_file="$local_applications_dir/bcl-chrome-browser.desktop"
 
   if ! command -v google-chrome >/dev/null 2>&1 && ! command -v google-chrome-stable >/dev/null 2>&1; then
     log "Skipping default browser configuration; Chrome binary not found"
     return
   fi
 
-  install -d -m 0755 "$user_home/.config/xfce4" "$applications_dir"
+  install -d -m 0755 "$user_home/.config/xfce4/xfconf/xfce-perchannel-xml" "$applications_dir" "$local_bin_dir" "$local_applications_dir"
 
-  install -d -m 0755 "$xfce_helper_dir"
+  cat > "$browser_wrapper_script" <<'EOF'
+#!/usr/bin/env bash
 
-  cat > "$xfce_helper_file" <<'EOF'
+set -euo pipefail
+
+exec /usr/bin/google-chrome-stable --password-store=basic "$@"
+EOF
+
+cat > "$browser_desktop_file" <<EOF
 [Desktop Entry]
 Version=1.0
-Type=X-XFCE-Helper
+Type=Application
 Name=Google Chrome
-X-XFCE-Category=WebBrowser
-X-XFCE-CommandsWithParameter=/usr/bin/google-chrome-stable "%s"
-X-XFCE-Commands=/usr/bin/google-chrome-stable
+Comment=Access the Internet
+Exec=$browser_wrapper_script %U
+Terminal=false
 Icon=google-chrome
-NoDisplay=true
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
 EOF
 
   cat > "$helpers_rc" <<'EOF'
-WebBrowser=custom-google-chrome.desktop
+WebBrowser=custom-WebBrowser
 WebBrowserDismissed=true
+EOF
+
+  cat > "$exo_xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="exo" version="1.0">
+  <property name="helpers" type="empty">
+    <property name="WebBrowser" type="empty">
+      <property name="Default" type="string" value="CustomWebBrowser"/>
+      <property name="CustomWebBrowser" type="string" value="$browser_wrapper_script"/>
+    </property>
+  </property>
+</channel>
 EOF
 
   cat > "$mimeapps_list" <<'EOF'
 [Default Applications]
-text/html=google-chrome.desktop
-x-scheme-handler/http=google-chrome.desktop
-x-scheme-handler/https=google-chrome.desktop
-x-scheme-handler/about=google-chrome.desktop
-x-scheme-handler/unknown=google-chrome.desktop
+text/html=bcl-chrome-browser.desktop
+x-scheme-handler/http=bcl-chrome-browser.desktop
+x-scheme-handler/https=bcl-chrome-browser.desktop
+x-scheme-handler/about=bcl-chrome-browser.desktop
+x-scheme-handler/unknown=bcl-chrome-browser.desktop
 EOF
 
-  chown "$user_name":"$user_name" "$helpers_rc" "$mimeapps_list"
-  chown "$user_name":"$user_name" "$xfce_helper_file"
+  chmod 0755 "$browser_wrapper_script"
+  chmod 0644 "$browser_desktop_file" "$helpers_rc" "$exo_xml" "$mimeapps_list"
+
+  chown "$user_name":"$user_name" "$browser_wrapper_script" "$browser_desktop_file" "$helpers_rc" "$exo_xml" "$mimeapps_list"
 
   # Configure desktop defaults via user session tools when available.
-  runuser -u "$user_name" -- xdg-settings set default-web-browser google-chrome.desktop >/dev/null 2>&1 || true
-  runuser -u "$user_name" -- xdg-mime default google-chrome.desktop text/html x-scheme-handler/http x-scheme-handler/https >/dev/null 2>&1 || true
+  runuser -u "$user_name" -- xdg-settings set default-web-browser bcl-chrome-browser.desktop >/dev/null 2>&1 || true
+  runuser -u "$user_name" -- xdg-mime default bcl-chrome-browser.desktop text/html x-scheme-handler/http x-scheme-handler/https >/dev/null 2>&1 || true
 
-  log "Configured Chrome as default browser for $user_name"
+  log "Configured Chrome launcher/default browser for $user_name"
 }
 
 install_wallpaper_asset() {
@@ -271,6 +296,7 @@ configure_xfce_wallpaper() {
   local user_home="$2"
   local xfce_dir="$user_home/.config/xfce4/xfconf/xfce-perchannel-xml"
   local xfce_wallpaper_xml="$xfce_dir/xfce4-desktop.xml"
+  local xfce_displays_xml="$xfce_dir/displays.xml"
   local autostart_dir="$user_home/.config/autostart"
   local local_bin_dir="$user_home/.local/bin"
   local wallpaper_setter_script="$local_bin_dir/bloomingedge-set-wallpaper.sh"
@@ -300,6 +326,15 @@ configure_xfce_wallpaper() {
       </property>
     </property>
   </property>
+</channel>
+EOF
+
+  cat > "$xfce_displays_xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="displays" version="1.0">
+  <property name="Notify" type="bool" value="false"/>
+  <property name="AutoEnableProfiles" type="bool" value="false"/>
 </channel>
 EOF
 
