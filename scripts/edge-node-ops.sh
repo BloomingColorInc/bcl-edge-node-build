@@ -1002,10 +1002,14 @@ collect_desktop_chrome_diagnostics() {
       echo
       echo "### ${label}"
       echo "\$ (as ${diag_user}) ${cmd}"
-      if command_exists runuser; then
+      if [[ "$USER" == "$diag_user" ]]; then
+        bash -lc "$cmd" 2>&1 || true
+      elif [[ "$needs_root" == true ]] && command_exists runuser; then
         runuser -u "$diag_user" -- bash -lc "$cmd" 2>&1 || true
-      else
+      elif command_exists sudo; then
         sudo -u "$diag_user" bash -lc "$cmd" 2>&1 || true
+      else
+        bash -lc "$cmd" 2>&1 || true
       fi
     } >> "$diagnostics_file"
   }
