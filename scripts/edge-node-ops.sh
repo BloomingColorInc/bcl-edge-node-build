@@ -372,8 +372,6 @@ pause() {
 }
 
 _OP_TIMER_PID=""
-_OP_TIMER_SCROLL_RESERVED=0
-_OP_TIMER_TERM_LINES=0
 
 _op_timer_format_mmss() {
   local total_seconds="$1"
@@ -385,22 +383,8 @@ _op_timer_format_mmss() {
 start_op_timer() {
   [[ -t 2 ]] || return 0
   _OP_TIMER_PID=""
-  _OP_TIMER_SCROLL_RESERVED=0
-  _OP_TIMER_TERM_LINES=0
   local op_start
   op_start="$(date +%s)"
-
-  if command_exists tput; then
-    local term_lines
-    term_lines="$(tput lines 2>/dev/null || echo 0)"
-    if [[ "$term_lines" =~ ^[0-9]+$ ]] && (( term_lines >= 4 )); then
-      _OP_TIMER_SCROLL_RESERVED=1
-      _OP_TIMER_TERM_LINES="$term_lines"
-      # Reserve top line for progress animation; keep scrolling in remaining area.
-      tput csr 1 $((term_lines - 1)) >&2 || true
-      tput cup 1 0 >&2 || true
-    fi
-  fi
 
   (
     local frames=( '-' '\\' '|' '/' )
@@ -412,15 +396,7 @@ start_op_timer() {
       elapsed_fmt="$(_op_timer_format_mmss "$elapsed")"
       spin="${frames[$(( idx % 4 ))]}"
 
-      if [[ "${_OP_TIMER_SCROLL_RESERVED}" == "1" ]]; then
-        # Save current cursor in scroll region, update pinned status line, then restore.
-        tput sc >&2 || true
-        tput cup 0 0 >&2 || true
-        printf '\033[2K\033[2m⏳ [%s] Running bootstrap... elapsed %s\033[0m' "$spin" "$elapsed_fmt" >&2
-        tput rc >&2 || true
-      else
-        printf '\r\033[2m⏳ [%s] Running bootstrap... elapsed %s\033[0m ' "$spin" "$elapsed_fmt" >&2
-      fi
+      printf '\r\033[K\033[2m⏳ [%s] Running bootstrap... elapsed %s\033[0m' "$spin" "$elapsed_fmt" >&2
 
       idx=$(( idx + 1 ))
       sleep 1
@@ -436,16 +412,7 @@ stop_op_timer() {
     wait "$_OP_TIMER_PID" 2>/dev/null || true
     _OP_TIMER_PID=""
 
-    if [[ "${_OP_TIMER_SCROLL_RESERVED}" == "1" ]] && command_exists tput; then
-      tput cup 0 0 >&2 || true
-      printf '\033[2K' >&2
-      tput csr 0 $((_OP_TIMER_TERM_LINES - 1)) >&2 || true
-      tput cup 1 0 >&2 || true
-      _OP_TIMER_SCROLL_RESERVED=0
-      _OP_TIMER_TERM_LINES=0
-    else
-      printf '\r\033[K' >&2
-    fi
+    printf '\r\033[K' >&2
 
     # Move to a clean next line so the next prompt does not overlap timer output.
     printf '\n' >&2
