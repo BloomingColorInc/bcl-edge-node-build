@@ -161,6 +161,11 @@ enable_service() {
   systemctl enable --now "$service_name"
 }
 
+is_container_running() {
+  local container_name="$1"
+  docker ps --format '{{.Names}}' | grep -Fxq "$container_name"
+}
+
 enable_display_manager() {
   local candidates=(lightdm gdm3 sddm)
   local service_name
@@ -302,8 +307,14 @@ install_portainer_agent() {
       log "Force Portainer redeploy enabled; removing existing container"
       docker rm -f "$PORTAINER_CONTAINER_NAME" >/dev/null 2>&1 || true
     else
-      log "Portainer agent container already exists"
+      log "Portainer agent container already exists; ensuring it is running"
       docker start "$PORTAINER_CONTAINER_NAME" >/dev/null 2>&1 || true
+      if is_container_running "$PORTAINER_CONTAINER_NAME"; then
+        log "Portainer agent container is running"
+      else
+        log "WARNING: Portainer agent container exists but is not running"
+        docker ps -a --filter "name=$PORTAINER_CONTAINER_NAME" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
+      fi
       return
     fi
   fi
@@ -316,6 +327,13 @@ install_portainer_agent() {
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v /var/lib/docker/volumes:/var/lib/docker/volumes \
     portainer/agent
+
+  if is_container_running "$PORTAINER_CONTAINER_NAME"; then
+    log "Portainer agent deployed and running"
+  else
+    log "WARNING: Portainer agent deployment completed but container is not running"
+    docker ps -a --filter "name=$PORTAINER_CONTAINER_NAME" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
+  fi
 }
 
 configure_firewall() {

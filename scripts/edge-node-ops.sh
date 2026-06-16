@@ -603,8 +603,8 @@ docker_stack_status() {
   say "Docker Stack Status"
   run_compose ps
   echo
-  say "Portainer Agent"
-  run_with_privilege docker ps --filter name=portainer-agent
+  say "Portainer Agent (all states)"
+  run_with_privilege docker ps -a --filter name=portainer-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
 
 docker_stack_up() {
@@ -790,19 +790,24 @@ quick_health_check() {
   ui_clear
   say "Service Health"
   if command_exists systemctl; then
-    run_with_privilege systemctl is-active docker || true
-    run_with_privilege systemctl is-active chrony || true
-    run_with_privilege systemctl is-active snmpd || true
-    run_with_privilege systemctl is-active xrdp || true
-    run_with_privilege systemctl is-active netbird || true
+    local svc state
+    for svc in docker chrony snmpd xrdp netbird; do
+      state="$(run_with_privilege systemctl is-active "$svc" 2>/dev/null || true)"
+      state="${state:-unknown}"
+      printf '%-12s %s\n' "${svc}:" "$state"
+    done
   else
     warn "systemctl not available on this host."
   fi
 
   echo
-  say "Docker Containers"
+  say "Docker Containers (running)"
   if command_exists docker; then
     run_with_privilege docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+
+    echo
+    say "Portainer Agent (all states)"
+    run_with_privilege docker ps -a --filter name=portainer-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
   else
     warn "docker CLI not installed"
   fi
