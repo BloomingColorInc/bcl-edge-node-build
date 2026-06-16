@@ -201,6 +201,43 @@ EOF
   DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable
 }
 
+configure_default_browser_for_user() {
+  local user_name="$1"
+  local user_home="$2"
+  local helpers_rc="$user_home/.config/xfce4/helpers.rc"
+  local applications_dir="$user_home/.config"
+  local mimeapps_list="$applications_dir/mimeapps.list"
+
+  if ! command -v google-chrome >/dev/null 2>&1 && ! command -v google-chrome-stable >/dev/null 2>&1; then
+    log "Skipping default browser configuration; Chrome binary not found"
+    return
+  fi
+
+  install -d -m 0755 "$user_home/.config/xfce4" "$applications_dir"
+
+  cat > "$helpers_rc" <<'EOF'
+WebBrowser=google-chrome.desktop
+WebBrowserDismissed=true
+EOF
+
+  cat > "$mimeapps_list" <<'EOF'
+[Default Applications]
+text/html=google-chrome.desktop
+x-scheme-handler/http=google-chrome.desktop
+x-scheme-handler/https=google-chrome.desktop
+x-scheme-handler/about=google-chrome.desktop
+x-scheme-handler/unknown=google-chrome.desktop
+EOF
+
+  chown "$user_name":"$user_name" "$helpers_rc" "$mimeapps_list"
+
+  # Configure desktop defaults via user session tools when available.
+  runuser -u "$user_name" -- xdg-settings set default-web-browser google-chrome.desktop >/dev/null 2>&1 || true
+  runuser -u "$user_name" -- xdg-mime default google-chrome.desktop text/html x-scheme-handler/http x-scheme-handler/https >/dev/null 2>&1 || true
+
+  log "Configured Chrome as default browser for $user_name"
+}
+
 install_wallpaper_asset() {
   if [[ ! -f "$WALLPAPER_SOURCE_PATH" ]]; then
     log "Skipping wallpaper install; source image not found: $WALLPAPER_SOURCE_PATH"
@@ -221,6 +258,7 @@ configure_xfce_wallpaper() {
   local local_bin_dir="$user_home/.local/bin"
   local wallpaper_setter_script="$local_bin_dir/bloomingedge-set-wallpaper.sh"
   local wallpaper_autostart_desktop="$autostart_dir/bloomingedge-set-wallpaper.desktop"
+  local display_popup_override_desktop="$autostart_dir/xfce4-display-settings.desktop"
 
   install -d -m 0755 "$xfce_dir"
 
@@ -283,6 +321,10 @@ apply_wallpaper_once() {
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+
+  # Prevent XFCE from repeatedly opening display settings on XRDP virtual displays.
+  xfconf-query -c displays -p /Notify -n -t bool -s false >/dev/null 2>&1 || true
+  xfconf-query -c displays -p /AutoEnableProfiles -n -t bool -s true >/dev/null 2>&1 || true
 }
 
 # Allow XFCE/XRDP monitor properties to settle, then enforce wallpaper repeatedly.
@@ -290,6 +332,13 @@ for _ in 1 2 3 4 5 6 7 8; do
   apply_wallpaper_once
   sleep 2
 done
+
+# If display settings dialog appears, close it after applying profile/wallpaper.
+pkill -x xfce4-display-settings >/dev/null 2>&1 || true
+
+if command -v xfdesktop >/dev/null 2>&1; then
+  xfdesktop --reload >/dev/null 2>&1 || true
+fi
 EOF
 
   cat > "$wallpaper_autostart_desktop" <<EOF
@@ -304,8 +353,17 @@ X-GNOME-Autostart-enabled=true
 NoDisplay=true
 EOF
 
+  cat > "$display_popup_override_desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=XFCE Display Settings
+Hidden=true
+X-GNOME-Autostart-enabled=false
+NoDisplay=true
+EOF
+
   chmod 0755 "$wallpaper_setter_script"
-  chmod 0644 "$wallpaper_autostart_desktop"
+  chmod 0644 "$wallpaper_autostart_desktop" "$display_popup_override_desktop"
 
   chown -R "$user_name":"$user_name" "$user_home/.config/xfce4" "$autostart_dir" "$local_bin_dir"
   log "Configured XFCE wallpaper for $user_name"
@@ -472,6 +530,7 @@ exec startxfce4
 EOF
     chown "$ADMIN_USER":"$ADMIN_USER" "$user_home/.xsession"
     chmod 755 "$user_home/.xsession"
+    configure_default_browser_for_user "$ADMIN_USER" "$user_home"
     if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
       configure_xfce_wallpaper "$ADMIN_USER" "$user_home"
     else
