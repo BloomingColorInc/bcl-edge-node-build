@@ -28,6 +28,7 @@ BASE_PACKAGES=(
   wget
   git
   htop
+  iftop
   btop
   nano
   vim
@@ -46,6 +47,9 @@ DESKTOP_PACKAGES=(
   xfce4-goodies
   lightdm
   lightdm-gtk-greeter
+  gnome-keyring
+  libpam-gnome-keyring
+  seahorse
   xorg
   xserver-xorg-input-all
   dbus-x11
@@ -321,6 +325,27 @@ EOF
   log "Configured LightDM for local XFCE sessions"
 }
 
+configure_gnome_keyring_for_desktop() {
+  local lightdm_pam_file="/etc/pam.d/lightdm"
+  local xrdp_pam_file="/etc/pam.d/xrdp-sesman"
+
+  if [[ -f "$lightdm_pam_file" ]] && ! grep -Fq 'pam_gnome_keyring.so' "$lightdm_pam_file"; then
+    cat >> "$lightdm_pam_file" <<'EOF'
+auth optional pam_gnome_keyring.so
+session optional pam_gnome_keyring.so auto_start
+EOF
+  fi
+
+  if [[ -f "$xrdp_pam_file" ]] && ! grep -Fq 'pam_gnome_keyring.so' "$xrdp_pam_file"; then
+    cat >> "$xrdp_pam_file" <<'EOF'
+auth optional pam_gnome_keyring.so
+session optional pam_gnome_keyring.so auto_start
+EOF
+  fi
+
+  log "Configured GNOME keyring integration for desktop sessions"
+}
+
 configure_xorg_for_xrdp() {
   cat > /etc/X11/Xwrapper.config <<'EOF'
 allowed_users=anybody
@@ -439,6 +464,10 @@ configure_desktop() {
     log "Configuring XFCE session for $ADMIN_USER"
     cat > "$user_home/.xsession" <<'EOF'
 #!/bin/sh
+if command -v gnome-keyring-daemon >/dev/null 2>&1; then
+  eval "$(gnome-keyring-daemon --start --components=pkcs11,secrets,ssh)"
+  export SSH_AUTH_SOCK
+fi
 exec startxfce4
 EOF
     chown "$ADMIN_USER":"$ADMIN_USER" "$user_home/.xsession"
@@ -479,6 +508,7 @@ exec startxfce4
 EOF
   chmod 0755 /etc/xrdp/startwm.sh
   configure_xorg_for_xrdp
+  configure_gnome_keyring_for_desktop
 
   if id -nG xrdp 2>/dev/null | tr ' ' '\n' | grep -Fxq ssl-cert; then
     log "xrdp is already a member of ssl-cert"

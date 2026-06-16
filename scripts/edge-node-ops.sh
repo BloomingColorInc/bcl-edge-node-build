@@ -538,11 +538,6 @@ run_bootstrap_wizard() {
     return 0
   fi
 
-  if ! confirm "Run bootstrap now with these settings?"; then
-    warn "Bootstrap run cancelled."
-    return 0
-  fi
-
   ui_clear
   say "Running bootstrap script..."
   local bootstrap_rc=0

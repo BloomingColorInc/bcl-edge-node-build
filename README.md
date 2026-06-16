@@ -187,11 +187,13 @@ The repository is hosted in the `bloomingcolorinc` GitHub organization.
 
 ---
 
-# 6. Run the Bootstrap Script
+# 6. Bootstrap the Node
 
-Run the bootstrap script after the operating system is installed and you can reach the node over SSH. It handles the repeatable parts of the build:
+Use the BloomingEdge CLI menu as the primary bootstrap path after the operating system is installed and you can reach the node over SSH. The direct bootstrap command should be treated as the secondary path for external automation or orchestration systems such as n8n.
 
-* OS package refresh and base utility installation
+Whether you use the menu or the direct script, the bootstrap process handles the repeatable parts of the build:
+
+* OS package refresh and base utility installation (`htop`, `iftop`, `btop`, and related tools)
 * Docker installation and enablement
 * NetBird package installation and enrollment when a setup key is provided
 * NetBird routing-peer host preparation (persistent IPv4/IPv6 forwarding)
@@ -200,6 +202,32 @@ Run the bootstrap script after the operating system is installed and you can rea
 * SNMP daemon installation for host polling
 * LibreNMS working directory creation
 * Baseline UFW rules for SSH and XRDP
+
+## Recommended: BloomingEdge CLI Menu
+
+From the cloned repository, launch the menu:
+
+```bash
+bash scripts/edge-node-ops.sh
+```
+
+Use option `1) Run Bootstrap Wizard` for normal provisioning. Use option `5) Run Bootstrap in Repair Mode` when you need to re-apply desktop, XRDP, NetBird, or Portainer-related configuration.
+
+The menu is the preferred path because it gives you a guided bootstrap workflow, shows live node state before and after provisioning, and provides a built-in quick health check once bootstrap completes.
+
+Before bootstrap, the menu provides environment and node-state context so you can verify you are on the expected host:
+
+![BloomingEdge CLI Menu before bootstrap](img/BloomingEdge-CLI-Menu1_Screenshot%20From%202026-06-16%2012-37-23.png)
+
+After bootstrap, the same menu shows populated service state for the node:
+
+![BloomingEdge CLI Menu after bootstrap](img/BloomingEdge-CLI-Menu2_Screenshot%20From%202026-06-16%2013-37-10.png)
+
+The quick health check gives a concise post-bootstrap validation view for services, containers, and NetBird state:
+
+![BloomingEdge CLI Menu health check](img/BloomingEdge-CLI-Menu3_Screenshot%20From%202026-06-16%2013-37-50.png)
+
+## Secondary: Direct Bootstrap Command
 
 Before running the script, generate a NetBird one-off setup key in the NetBird management dashboard:
 
@@ -211,6 +239,8 @@ Before running the script, generate a NetBird one-off setup key in the NetBird m
 > **READ FIRST:** NetBird one-off setup keys are shown only once when created. Copy and securely save the key before closing the dialog, or you will need to generate a new key.
 
 If your organization manages keys from Settings → Setup Keys instead, create a new one-off key there and copy it immediately before you close the dialog.
+
+Use the direct command only when you are driving provisioning from an external automation workflow, or when you explicitly need a fully non-interactive invocation.
 
 Run the script from the cloned repository:
 
@@ -369,7 +399,7 @@ Existing peers:
 
 # 9. GUI and XRDP
 
-The bootstrap script installs XFCE, LightDM, XRDP, Google Chrome, sets the BloomingEdge wallpaper, configures the admin user's XFCE session, updates `/etc/xrdp/startwm.sh`, and enables the relevant services.
+The bootstrap script installs XFCE, LightDM, XRDP, Google Chrome, GNOME keyring components needed by Chrome, sets the BloomingEdge wallpaper, configures the admin user's XFCE session, updates `/etc/xrdp/startwm.sh`, and enables the relevant services.
 
 For existing nodes where desktop behavior needs to be corrected (for example local console input issues or wallpaper not applying), rerun bootstrap in repair mode:
 
