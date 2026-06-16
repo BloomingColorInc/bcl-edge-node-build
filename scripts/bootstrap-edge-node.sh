@@ -319,6 +319,15 @@ EOF
   log "Configured LightDM for local XFCE sessions"
 }
 
+configure_xorg_for_xrdp() {
+  cat > /etc/X11/Xwrapper.config <<'EOF'
+allowed_users=anybody
+needs_root_rights=yes
+EOF
+
+  log "Configured Xorg wrapper for XRDP sessions"
+}
+
 enable_service() {
   local service_name="$1"
   log "Enabling service: $service_name"
@@ -442,39 +451,32 @@ EOF
   fi
 
   log "Configuring XRDP to start XFCE"
-  python3 - <<'PY'
-from pathlib import Path
+  cat > /etc/xrdp/startwm.sh <<'EOF'
+#!/bin/sh
 
-path = Path('/etc/xrdp/startwm.sh')
-content = path.read_text()
-marker = 'export DESKTOP_SESSION=xfce\nexport XDG_CURRENT_DESKTOP=XFCE\nexec startxfce4\n'
+if [ -r /etc/profile ]; then
+  . /etc/profile
+fi
 
-if marker in content:
-    raise SystemExit(0)
+if [ -r "$HOME/.profile" ]; then
+  . "$HOME/.profile"
+fi
 
-lines = content.splitlines()
-while lines and lines[-1].strip() == '':
-    lines.pop()
+export DESKTOP_SESSION=xfce
+export XDG_CURRENT_DESKTOP=XFCE
 
-replacement_done = False
-for index in range(len(lines) - 1, -1, -1):
-    line = lines[index].strip()
-    if line.startswith('exec ') or line.startswith('test -x '):
-        lines = lines[:index]
-        replacement_done = True
-        break
+# Clear stale values so XRDP can create a fresh desktop session.
+unset DBUS_SESSION_BUS_ADDRESS
+unset XDG_RUNTIME_DIR
 
-if not replacement_done:
-    lines.append('')
+if command -v dbus-launch >/dev/null 2>&1; then
+  exec dbus-launch --exit-with-session startxfce4
+fi
 
-lines.extend([
-    'export DESKTOP_SESSION=xfce',
-    'export XDG_CURRENT_DESKTOP=XFCE',
-    'exec startxfce4',
-    '',
-])
-path.write_text('\n'.join(lines))
-PY
+exec startxfce4
+EOF
+  chmod 0755 /etc/xrdp/startwm.sh
+  configure_xorg_for_xrdp
 
   if id -nG xrdp 2>/dev/null | tr ' ' '\n' | grep -Fxq ssl-cert; then
     log "xrdp is already a member of ssl-cert"
@@ -484,6 +486,7 @@ PY
 
   configure_lightdm
   enable_service xrdp
+  systemctl restart xrdp-sesman xrdp
   enable_display_manager
 }
 
