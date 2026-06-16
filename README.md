@@ -224,6 +224,35 @@ bash scripts/bootstrap-edge-node.sh
 
 `NETBIRD_SETUP_KEY` should contain that one-off key copied from the NetBird dashboard. Pass it in as an environment variable when you start the script; do not store it in the repository.
 
+Each bootstrap run now logs full output to:
+
+* `edge-node-bootstrap.log` (latest run)
+* `edge-node-bootstrap-YYYYmmdd-HHMMSS.log` (timestamped run record)
+
+Both files are written to your current working directory by default.
+
+To write logs somewhere else, set `BOOTSTRAP_LOG_DIR`. To force a single explicit log path, set `BOOTSTRAP_LOG_FILE`.
+
+Directory example:
+
+```bash
+sudo BOOTSTRAP_LOG_DIR=/var/log \
+EDGE_ADMIN_USER=netadmin \
+NETBIRD_SETUP_KEY=<setup-key> \
+NETBIRD_HOSTNAME=bcl-edge-lom-01 \
+bash scripts/bootstrap-edge-node.sh
+```
+
+Single-file example:
+
+```bash
+sudo BOOTSTRAP_LOG_FILE=/var/log/edge-node-bootstrap.log \
+EDGE_ADMIN_USER=netadmin \
+NETBIRD_SETUP_KEY=<setup-key> \
+NETBIRD_HOSTNAME=bcl-edge-lom-01 \
+bash scripts/bootstrap-edge-node.sh
+```
+
 The bootstrap script is designed to be re-runnable (idempotent) for normal operations. In repair situations, you can force re-application of key components with repair flags.
 
 Optional environment flags:

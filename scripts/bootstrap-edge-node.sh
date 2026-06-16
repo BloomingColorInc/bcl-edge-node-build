@@ -14,6 +14,7 @@ REPAIR_MODE="${REPAIR_MODE:-no}"
 FORCE_NETBIRD_REENROLL="${FORCE_NETBIRD_REENROLL:-no}"
 FORCE_PORTAINER_REDEPLOY="${FORCE_PORTAINER_REDEPLOY:-no}"
 PORTAINER_CONTAINER_NAME="${PORTAINER_CONTAINER_NAME:-portainer-agent}"
+LOG_BASENAME="${BOOTSTRAP_LOG_BASENAME:-edge-node-bootstrap}"
 
 BASE_PACKAGES=(
   curl
@@ -46,6 +47,54 @@ DESKTOP_PACKAGES=(
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+print_banner() {
+  local title="$1"
+  local subtitle="${2:-}"
+  local border="============================================================"
+  printf '\n%s\n' "$border"
+  printf '== %s\n' "$title"
+  if [[ -n "$subtitle" ]]; then
+    printf '== %s\n' "$subtitle"
+  fi
+  printf '%s\n' "$border"
+}
+
+init_logging() {
+  local timestamp="$(date '+%Y%m%d-%H%M%S')"
+  local log_dir="${BOOTSTRAP_LOG_DIR:-$PWD}"
+  local latest_log_file="${log_dir}/${LOG_BASENAME}.log"
+  local run_log_file="${log_dir}/${LOG_BASENAME}-${timestamp}.log"
+
+  # BOOTSTRAP_LOG_FILE remains supported as an explicit single-file override.
+  if [[ -n "${BOOTSTRAP_LOG_FILE:-}" ]]; then
+    latest_log_file="$BOOTSTRAP_LOG_FILE"
+    run_log_file="$BOOTSTRAP_LOG_FILE"
+  fi
+
+  mkdir -p "$(dirname "$latest_log_file")"
+  touch "$latest_log_file"
+
+  if [[ "$run_log_file" != "$latest_log_file" ]]; then
+    touch "$run_log_file"
+    : > "$latest_log_file"
+  fi
+
+  if [[ "${EDGE_BOOTSTRAP_LOGGING_ACTIVE:-no}" != "yes" ]]; then
+    export EDGE_BOOTSTRAP_LOGGING_ACTIVE="yes"
+    if [[ "$run_log_file" == "$latest_log_file" ]]; then
+      exec > >(tee -a "$latest_log_file") 2>&1
+    else
+      exec > >(tee -a "$run_log_file" "$latest_log_file") 2>&1
+    fi
+  fi
+
+  if [[ "$run_log_file" == "$latest_log_file" ]]; then
+    log "Bootstrap log file: $latest_log_file"
+  else
+    log "Bootstrap log files: latest=$latest_log_file, run=$run_log_file"
+  fi
 }
 
 normalize_yes_no() {
@@ -110,6 +159,20 @@ enable_service() {
   local service_name="$1"
   log "Enabling service: $service_name"
   systemctl enable --now "$service_name"
+}
+
+enable_display_manager() {
+  local candidates=(lightdm gdm3 sddm)
+  local service_name
+
+  for service_name in "${candidates[@]}"; do
+    if systemctl list-unit-files "${service_name}.service" --no-legend 2>/dev/null | grep -q "^${service_name}\\.service"; then
+      enable_service "$service_name"
+      return 0
+    fi
+  done
+
+  log "No known display manager service found (tried: ${candidates[*]}). Skipping display manager enable."
 }
 
 install_docker() {
@@ -220,7 +283,7 @@ PY
     adduser xrdp ssl-cert
   fi
   enable_service xrdp
-  enable_service display-manager
+  enable_display_manager
 }
 
 install_portainer_agent() {
@@ -303,20 +366,47 @@ EOF
 
 main() {
   require_root
+  init_logging
   apply_mode_defaults
+
+  print_banner "BOOTSTRAP START" "Copyright (c) 2026 Blooming Color, Inc. All rights reserved."
   show_mode_summary
+
+  print_banner "APT UPDATE AND UPGRADE"
   run_apt_update
+
+  print_banner "BASE PACKAGE INSTALL"
   install_packages "${BASE_PACKAGES[@]}"
+
+  print_banner "CORE SERVICE ENABLEMENT"
   enable_service chrony
   enable_service snmpd
+
+  print_banner "DOCKER INSTALLATION"
   install_docker
+
+  print_banner "NETBIRD INSTALLATION"
   install_netbird
+
+  print_banner "NETBIRD ENROLLMENT"
   enroll_netbird
+
+  print_banner "DESKTOP AND XRDP CONFIGURATION"
   configure_desktop
+
+  print_banner "PORTAINER AGENT DEPLOYMENT"
   install_portainer_agent
+
+  print_banner "LIBRENMS DIRECTORY PREPARATION"
   prepare_librenms_path
+
+  print_banner "FIREWALL CONFIGURATION"
   configure_firewall
+
+  print_banner "POST-INSTALL NEXT STEPS"
   print_next_steps
+
+  print_banner "BOOTSTRAP COMPLETE"
 }
 
 main "$@"
