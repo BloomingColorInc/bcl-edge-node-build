@@ -194,6 +194,7 @@ Run the bootstrap script after the operating system is installed and you can rea
 * OS package refresh and base utility installation
 * Docker installation and enablement
 * NetBird package installation and enrollment when a setup key is provided
+* NetBird routing-peer host preparation (persistent IPv4/IPv6 forwarding)
 * XFCE, XRDP, and session configuration
 * Portainer Agent deployment
 * SNMP daemon installation for host polling
@@ -258,6 +259,7 @@ The bootstrap script is designed to be re-runnable (idempotent) for normal opera
 Optional environment flags:
 
 `INSTALL_BLOOMINGEDGE_WALLPAPER` defaults to `yes`.
+NetBird routing-peer preparation is always enabled in both standard and repair modes.
 
 ```bash
 sudo EDGE_ADMIN_USER=netadmin \

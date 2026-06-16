@@ -9,6 +9,7 @@ DEFAULT_ADMIN_USER="${SUDO_USER:-netadmin}"
 ADMIN_USER="${EDGE_ADMIN_USER:-$DEFAULT_ADMIN_USER}"
 NETBIRD_SETUP_KEY="${NETBIRD_SETUP_KEY:-}"
 NETBIRD_HOSTNAME="${NETBIRD_HOSTNAME:-$(hostname -s)}"
+PREPARE_NETBIRD_ROUTING_PEER="yes"
 INSTALL_DESKTOP="${INSTALL_DESKTOP:-yes}"
 INSTALL_BLOOMINGEDGE_WALLPAPER="${INSTALL_BLOOMINGEDGE_WALLPAPER:-yes}"
 INSTALL_PORTAINER="${INSTALL_PORTAINER:-yes}"
@@ -118,6 +119,7 @@ normalize_yes_no() {
 }
 
 apply_mode_defaults() {
+  PREPARE_NETBIRD_ROUTING_PEER="yes"
   INSTALL_DESKTOP="$(normalize_yes_no "$INSTALL_DESKTOP")"
   INSTALL_BLOOMINGEDGE_WALLPAPER="$(normalize_yes_no "$INSTALL_BLOOMINGEDGE_WALLPAPER")"
   INSTALL_PORTAINER="$(normalize_yes_no "$INSTALL_PORTAINER")"
@@ -129,6 +131,7 @@ apply_mode_defaults() {
 
   if [[ "$REPAIR_MODE" == "yes" ]]; then
     # Repair mode forces re-apply of key mutable components.
+    PREPARE_NETBIRD_ROUTING_PEER="yes"
     INSTALL_DESKTOP="yes"
     INSTALL_PORTAINER="yes"
     CONFIGURE_UFW="yes"
@@ -138,7 +141,7 @@ apply_mode_defaults() {
 }
 
 show_mode_summary() {
-  log "Mode summary: REPAIR_MODE=$REPAIR_MODE, FORCE_NETBIRD_REENROLL=$FORCE_NETBIRD_REENROLL, FORCE_PORTAINER_REDEPLOY=$FORCE_PORTAINER_REDEPLOY"
+  log "Mode summary: REPAIR_MODE=$REPAIR_MODE, PREPARE_NETBIRD_ROUTING_PEER=$PREPARE_NETBIRD_ROUTING_PEER, FORCE_NETBIRD_REENROLL=$FORCE_NETBIRD_REENROLL, FORCE_PORTAINER_REDEPLOY=$FORCE_PORTAINER_REDEPLOY"
 }
 
 require_root() {
@@ -369,6 +372,22 @@ install_netbird() {
   curl -fsSL https://pkgs.netbird.io/install.sh | bash
 }
 
+configure_netbird_routing_prereqs() {
+  local sysctl_file="/etc/sysctl.d/99-netbird-routing.conf"
+  log "Configuring NetBird routing-peer prerequisites (IP forwarding)"
+
+  cat > "$sysctl_file" <<'EOF'
+net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1
+EOF
+
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null || true
+  sysctl --system >/dev/null || true
+
+  log "NetBird routing-peer host preparation complete"
+}
+
 enroll_netbird() {
   if [[ -z "$NETBIRD_SETUP_KEY" ]]; then
     log "NetBird setup key not supplied; skipping enrollment"
@@ -407,7 +426,10 @@ configure_desktop() {
     local user_home
     user_home="$(getent passwd "$ADMIN_USER" | cut -d: -f6)"
     log "Configuring XFCE session for $ADMIN_USER"
-    printf 'xfce4-session\n' > "$user_home/.xsession"
+    cat > "$user_home/.xsession" <<'EOF'
+#!/bin/sh
+exec startxfce4
+EOF
     chown "$ADMIN_USER":"$ADMIN_USER" "$user_home/.xsession"
     chmod 755 "$user_home/.xsession"
     if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
@@ -579,6 +601,9 @@ main() {
 
   print_banner "NETBIRD INSTALLATION"
   install_netbird
+
+  print_banner "NETBIRD ROUTING PEER PREPARATION"
+  configure_netbird_routing_prereqs
 
   print_banner "NETBIRD ENROLLMENT"
   enroll_netbird
