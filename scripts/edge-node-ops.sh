@@ -967,6 +967,76 @@ quick_health_check() {
   fi
 }
 
+collect_desktop_chrome_diagnostics() {
+  ui_clear
+
+  local diag_user="${SUDO_USER:-$USER}"
+  local timestamp diagnostics_dir diagnostics_file
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  diagnostics_dir="$REPO_ROOT/diagnostics"
+  diagnostics_file="$diagnostics_dir/desktop-chrome-diagnostics-${timestamp}.log"
+
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    runuser -u "$SUDO_USER" -- mkdir -p "$diagnostics_dir" 2>/dev/null || mkdir -p "$diagnostics_dir"
+  else
+    mkdir -p "$diagnostics_dir"
+  fi
+
+  : > "$diagnostics_file"
+
+  _diag_append_cmd() {
+    local label="$1"
+    local cmd="$2"
+    {
+      echo
+      echo "### ${label}"
+      echo "\$ ${cmd}"
+      bash -lc "$cmd" 2>&1 || true
+    } >> "$diagnostics_file"
+  }
+
+  _diag_append_user_cmd() {
+    local label="$1"
+    local cmd="$2"
+    {
+      echo
+      echo "### ${label}"
+      echo "\$ (as ${diag_user}) ${cmd}"
+      if command_exists runuser; then
+        runuser -u "$diag_user" -- bash -lc "$cmd" 2>&1 || true
+      else
+        sudo -u "$diag_user" bash -lc "$cmd" 2>&1 || true
+      fi
+    } >> "$diagnostics_file"
+  }
+
+  {
+    echo "BloomingEdge Desktop/Chrome Diagnostics"
+    echo "Generated: $(date -Is)"
+    echo "Host: $(hostname)"
+    echo "User context: $diag_user"
+    echo "Repo root: $REPO_ROOT"
+  } >> "$diagnostics_file"
+
+  _diag_append_user_cmd "Desktop Defaults" "xdg-settings get default-web-browser; xdg-mime query default x-scheme-handler/http; xdg-mime query default text/html"
+  _diag_append_user_cmd "XFCE/Exo Browser Launch" "exo-open --launch WebBrowser https://example.com"
+  _diag_append_user_cmd "Chrome Direct Launch Test" "timeout 12s /usr/bin/google-chrome-stable --password-store=basic --enable-logging=stderr --v=1 about:blank"
+  _diag_append_user_cmd "Chrome Profile Paths" "ls -la ~/.config/google-chrome; ls -la ~/.cache/google-chrome"
+  _diag_append_user_cmd "Chrome Debug Logs" "tail -n 200 ~/.config/google-chrome/chrome_debug.log 2>/dev/null; tail -n 200 ~/.cache/google-chrome/chrome_debug.log 2>/dev/null"
+  _diag_append_user_cmd "XFCE Browser Config Files" "sed -n '1,220p' ~/.config/xfce4/helpers.rc 2>/dev/null; sed -n '1,260p' ~/.config/xfce4/xfconf/xfce-perchannel-xml/exo.xml 2>/dev/null; sed -n '1,260p' ~/.config/mimeapps.list 2>/dev/null"
+  _diag_append_user_cmd "Wallpaper/Display Config Files" "sed -n '1,260p' ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml 2>/dev/null; sed -n '1,260p' ~/.config/xfce4/xfconf/xfce-perchannel-xml/displays.xml 2>/dev/null"
+  _diag_append_user_cmd "User Session Logs" "journalctl --user -b --no-pager | grep -Ei 'chrome|exo|xdg|browser|keyring|xfce4-display|xfdesktop' | tail -n 400; grep -Ei 'chrome|exo|xdg|browser|keyring|xfce4-display|xfdesktop' ~/.xsession-errors 2>/dev/null | tail -n 200"
+  _diag_append_cmd "Chrome Binary Checks" "command -v google-chrome-stable; ls -l /usr/bin/google-chrome-stable; file /usr/bin/google-chrome-stable"
+  _diag_append_cmd "Autostart Entries" "find /etc/xdg/autostart /etc/xdg/xdg-xubuntu/autostart -maxdepth 1 -type f 2>/dev/null | sort"
+  _diag_append_cmd "Running Display Processes" "ps -ef | grep -E 'xfce4-display-settings|xfdesktop|xfce4-session' | grep -v grep"
+
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER":"$SUDO_USER" "$diagnostics_file" 2>/dev/null || true
+  fi
+
+  ok "Desktop/Chrome diagnostics collected: $diagnostics_file"
+}
+
 main_menu() {
   check_required_files
 
@@ -981,7 +1051,8 @@ main_menu() {
       "3) NetBird Operations" \
       "4) LibreNMS Poller Agent" \
       "5) Quick Health Check" \
-      "6) Run Bootstrap in Repair Mode"
+      "6) Run Bootstrap in Repair Mode" \
+      "7) Collect Desktop/Chrome Diagnostics"
 
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
@@ -994,6 +1065,7 @@ main_menu() {
       4) librenms_poller_menu ;;
       5) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
       6) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
+      7) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
     esac
