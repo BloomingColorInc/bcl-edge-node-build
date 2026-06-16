@@ -2,11 +2,15 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 DEFAULT_ADMIN_USER="${SUDO_USER:-netadmin}"
 ADMIN_USER="${EDGE_ADMIN_USER:-$DEFAULT_ADMIN_USER}"
 NETBIRD_SETUP_KEY="${NETBIRD_SETUP_KEY:-}"
 NETBIRD_HOSTNAME="${NETBIRD_HOSTNAME:-$(hostname -s)}"
 INSTALL_DESKTOP="${INSTALL_DESKTOP:-yes}"
+INSTALL_BLOOMINGEDGE_WALLPAPER="${INSTALL_BLOOMINGEDGE_WALLPAPER:-yes}"
 INSTALL_PORTAINER="${INSTALL_PORTAINER:-yes}"
 CONFIGURE_UFW="${CONFIGURE_UFW:-yes}"
 ENABLE_FULL_UPGRADE="${ENABLE_FULL_UPGRADE:-yes}"
@@ -15,6 +19,8 @@ FORCE_NETBIRD_REENROLL="${FORCE_NETBIRD_REENROLL:-no}"
 FORCE_PORTAINER_REDEPLOY="${FORCE_PORTAINER_REDEPLOY:-no}"
 PORTAINER_CONTAINER_NAME="${PORTAINER_CONTAINER_NAME:-portainer-agent}"
 LOG_BASENAME="${BOOTSTRAP_LOG_BASENAME:-edge-node-bootstrap}"
+WALLPAPER_SOURCE_PATH="${EDGE_WALLPAPER_SOURCE:-$REPO_ROOT/img/BloomingEdge_Network.png}"
+WALLPAPER_TARGET_PATH="${EDGE_WALLPAPER_TARGET:-/usr/share/backgrounds/BloomingEdge_Network.png}"
 
 BASE_PACKAGES=(
   curl
@@ -111,6 +117,7 @@ normalize_yes_no() {
 
 apply_mode_defaults() {
   INSTALL_DESKTOP="$(normalize_yes_no "$INSTALL_DESKTOP")"
+  INSTALL_BLOOMINGEDGE_WALLPAPER="$(normalize_yes_no "$INSTALL_BLOOMINGEDGE_WALLPAPER")"
   INSTALL_PORTAINER="$(normalize_yes_no "$INSTALL_PORTAINER")"
   CONFIGURE_UFW="$(normalize_yes_no "$CONFIGURE_UFW")"
   ENABLE_FULL_UPGRADE="$(normalize_yes_no "$ENABLE_FULL_UPGRADE")"
@@ -183,6 +190,52 @@ EOF
 
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable
+}
+
+install_wallpaper_asset() {
+  if [[ ! -f "$WALLPAPER_SOURCE_PATH" ]]; then
+    log "Skipping wallpaper install; source image not found: $WALLPAPER_SOURCE_PATH"
+    return
+  fi
+
+  install -m 0755 -d "$(dirname "$WALLPAPER_TARGET_PATH")"
+  install -m 0644 "$WALLPAPER_SOURCE_PATH" "$WALLPAPER_TARGET_PATH"
+  log "Installed BloomingEdge wallpaper: $WALLPAPER_TARGET_PATH"
+}
+
+configure_xfce_wallpaper() {
+  local user_name="$1"
+  local user_home="$2"
+  local xfce_dir="$user_home/.config/xfce4/xfconf/xfce-perchannel-xml"
+  local xfce_wallpaper_xml="$xfce_dir/xfce4-desktop.xml"
+
+  install -d -m 0755 "$xfce_dir"
+
+  cat > "$xfce_wallpaper_xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="last-image" type="string" value="$WALLPAPER_TARGET_PATH"/>
+          <property name="image-style" type="int" value="5"/>
+        </property>
+      </property>
+      <property name="monitorVirtual1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="last-image" type="string" value="$WALLPAPER_TARGET_PATH"/>
+          <property name="image-style" type="int" value="5"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+  chown -R "$user_name":"$user_name" "$user_home/.config/xfce4"
+  log "Configured XFCE wallpaper for $user_name"
 }
 
 enable_service() {
@@ -266,6 +319,11 @@ configure_desktop() {
 
   install_packages "${DESKTOP_PACKAGES[@]}"
   install_google_chrome
+  if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
+    install_wallpaper_asset
+  else
+    log "Skipping BloomingEdge wallpaper installation"
+  fi
 
   if id "$ADMIN_USER" >/dev/null 2>&1; then
     local user_home
@@ -274,6 +332,11 @@ configure_desktop() {
     printf 'xfce4-session\n' > "$user_home/.xsession"
     chown "$ADMIN_USER":"$ADMIN_USER" "$user_home/.xsession"
     chmod 755 "$user_home/.xsession"
+    if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
+      configure_xfce_wallpaper "$ADMIN_USER" "$user_home"
+    else
+      log "Skipping XFCE wallpaper configuration"
+    fi
   else
     log "Skipping user session configuration; user $ADMIN_USER does not exist"
   fi

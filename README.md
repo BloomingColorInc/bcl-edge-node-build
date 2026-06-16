@@ -257,11 +257,14 @@ The bootstrap script is designed to be re-runnable (idempotent) for normal opera
 
 Optional environment flags:
 
+`INSTALL_BLOOMINGEDGE_WALLPAPER` defaults to `yes`.
+
 ```bash
 sudo EDGE_ADMIN_USER=netadmin \
 NETBIRD_SETUP_KEY=<setup-key> \
 NETBIRD_HOSTNAME=bcl-edge-lom-01 \
 INSTALL_DESKTOP=yes \
+INSTALL_BLOOMINGEDGE_WALLPAPER=yes \
 INSTALL_PORTAINER=yes \
 CONFIGURE_UFW=yes \
 REPAIR_MODE=no \
@@ -364,7 +367,7 @@ Existing peers:
 
 # 9. GUI and XRDP
 
-The bootstrap script installs XFCE, LightDM, XRDP, Google Chrome, configures the admin user's XFCE session, updates `/etc/xrdp/startwm.sh`, and enables the relevant services.
+The bootstrap script installs XFCE, LightDM, XRDP, Google Chrome, sets the BloomingEdge wallpaper, configures the admin user's XFCE session, updates `/etc/xrdp/startwm.sh`, and enables the relevant services.
 
 If you skip desktop installation by setting `INSTALL_DESKTOP=no`, complete the GUI and XRDP setup manually before remote access testing.
 
