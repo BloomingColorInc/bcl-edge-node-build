@@ -64,15 +64,16 @@ services:
     volumes:
       - librenms-data:/data
 
-  portainer-agent:
-    image: portainer/agent:latest
-    container_name: portainer-agent
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
     restart: unless-stopped
     ports:
-      - "9001:9001"
+      - "9000:9000"
+      - "9443:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /var/lib/docker/volumes:/var/lib/docker/volumes
+      - /opt/portainer:/data
 
 volumes:
   librenms-data:

@@ -23,7 +23,7 @@ Primary functions:
 * Site-to-Site Overlay Networking
 * Remote User Access
 * LibreNMS Distributed Poller
-* Portainer Agent
+* Portainer Server
 * Maintenance Automation
 * Emergency GUI Administration
 
@@ -198,7 +198,7 @@ Whether you use the menu or the direct script, the bootstrap process handles the
 * NetBird package installation and enrollment when a setup key is provided
 * NetBird routing-peer host preparation (persistent IPv4/IPv6 forwarding)
 * XFCE, XRDP, and session configuration
-* Portainer Agent deployment
+* Portainer Server deployment
 * SNMP daemon installation for host polling
 * LibreNMS working directory creation
 * Baseline UFW rules for SSH and XRDP
@@ -427,14 +427,14 @@ NetBird-IP
 
 ---
 
-# 10. Portainer Agent
+# 10. Portainer Server
 
-The bootstrap script deploys the Portainer Agent container by default so the node can be managed from Portainer without a separate install step.
+The bootstrap script deploys a standalone Portainer CE server container by default so the node can be managed from Portainer without a separate install step.
 
 Verify:
 
 ```bash
-docker ps --filter name=portainer-agent
+docker ps --filter name=portainer
 ```
 
 ---
@@ -511,7 +511,7 @@ The repository includes a Docker Compose stack for:
 * LibreNMS dispatcher (`dispatcher`)
 * MariaDB (`db`)
 * Redis (`redis`)
-* Portainer Agent (`portainer-agent`)
+* Portainer Server (`portainer`)
 
 Set strong database credentials before launching the stack:
 
@@ -529,7 +529,7 @@ Verify:
 
 ```bash
 docker compose ps
-docker ps --filter name=portainer-agent
+docker ps --filter name=portainer
 systemctl status snmpd
 ```
 
@@ -538,7 +538,7 @@ Use LibreNMS to add this node as a polled device after SNMP is reachable over Ne
 How this communicates with AWS Triad:
 
 1. NetBird creates the encrypted overlay between this edge node and the AWS Triad environment.
-2. Portainer Agent listens on port 9001 on this node, and the Portainer server in AWS Triad connects to it over the NetBird network for remote container operations.
+2. Portainer Server listens on ports `9000` and `9443` on this node, and operators in AWS Triad connect to the Portainer web UI over the NetBird network for remote container operations.
 3. The local LibreNMS services (`librenms`, `dispatcher`, `db`, `redis`) run on this node and monitor local devices through SNMP.
 4. In distributed monitoring deployments, polling data and coordination traffic are exchanged with AWS Triad services over NetBird instead of exposing services directly to the public internet.
 5. Operational access (SSH, Portainer, monitoring traffic) should be restricted to NetBird-managed addresses and groups.
@@ -548,7 +548,7 @@ AWS Triad configuration steps:
 1. In NetBird, place AWS management services (Portainer server, AWS LibreNMS, automation hosts) in a management group, and place BloomingEdge nodes in an edge group.
 2. Create NetBird access policies that allow management-to-edge traffic only for required ports:
   * TCP 22 for SSH
-  * TCP 9001 for Portainer Agent
+  * TCP 9000 and 9443 for Portainer Server
   * UDP 161 for SNMP polling
   * Any additional monitoring ports used by your standards
 3. Do not publish these management services to public internet paths; use NetBird overlay addressing as the primary path.
@@ -556,9 +556,9 @@ AWS Triad configuration steps:
 Portainer in AWS to BloomingEdge:
 
 1. In AWS Portainer, create or select the target environment group for edge sites.
-2. Add each BloomingEdge node as an Agent environment using its NetBird IP or DNS name on port `9001`.
+2. Connect to each BloomingEdge node using its NetBird IP or DNS name on port `9443` for HTTPS or `9000` for HTTP if you have intentionally enabled that path.
 3. Tag environments by site, role, and lifecycle state (for example `lom`, `edge`, `primary`).
-4. Validate connectivity from Portainer by confirming endpoint status is healthy and container inventory is visible.
+4. Validate connectivity by confirming the Portainer UI loads and container inventory is visible.
 5. Use RBAC in Portainer so only approved operator roles can deploy or restart edge workloads.
 
 LibreNMS in AWS to BloomingEdge:
@@ -566,7 +566,7 @@ LibreNMS in AWS to BloomingEdge:
 1. In AWS LibreNMS, add each BloomingEdge node as a device using its NetBird IP address and SNMP credentials.
 2. Assign each node to site groups so alert routing and maintenance windows can be managed per location.
 3. If you are using distributed pollers, map the correct poller group to each site and ensure NetBird policies allow poller-to-device SNMP paths.
-4. Add service checks for internal stack endpoints you want AWS to track (for example Portainer Agent reachability or application health URLs on the edge host).
+4. Add service checks for internal stack endpoints you want AWS to track (for example Portainer Server reachability or application health URLs on the edge host).
 5. Validate by running discovery and polling, then confirm graphs and alerts populate for both the host and selected internal services.
 
 ---

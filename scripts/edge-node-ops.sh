@@ -575,8 +575,8 @@ docker_stack_status() {
   say "Docker Stack Status"
   run_compose ps
   echo
-  say "Portainer Agent (all states)"
-  run_with_privilege docker ps -a --filter name=portainer-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+  say "Portainer (all states)"
+  run_with_privilege docker ps -a --filter name=portainer --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
 
 docker_stack_up() {
@@ -948,8 +948,8 @@ quick_health_check() {
     run_with_privilege docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 
     echo
-    say "Portainer Agent (all states)"
-    run_with_privilege docker ps -a --filter name=portainer-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+    say "Portainer (all states)"
+    run_with_privilege docker ps -a --filter name=portainer --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 
     echo
     say "LibreNMS Poller Agent (all states)"

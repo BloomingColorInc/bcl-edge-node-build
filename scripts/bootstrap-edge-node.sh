@@ -18,7 +18,7 @@ ENABLE_FULL_UPGRADE="${ENABLE_FULL_UPGRADE:-yes}"
 REPAIR_MODE="${REPAIR_MODE:-no}"
 FORCE_NETBIRD_REENROLL="${FORCE_NETBIRD_REENROLL:-no}"
 FORCE_PORTAINER_REDEPLOY="${FORCE_PORTAINER_REDEPLOY:-no}"
-PORTAINER_CONTAINER_NAME="${PORTAINER_CONTAINER_NAME:-portainer-agent}"
+PORTAINER_CONTAINER_NAME="${PORTAINER_CONTAINER_NAME:-portainer}"
 LOG_BASENAME="${BOOTSTRAP_LOG_BASENAME:-edge-node-bootstrap}"
 WALLPAPER_SOURCE_PATH="${EDGE_WALLPAPER_SOURCE:-$REPO_ROOT/img/BloomingEdge_Network.png}"
 WALLPAPER_TARGET_PATH="${EDGE_WALLPAPER_TARGET:-/usr/share/backgrounds/BloomingEdge_Network.png}"
@@ -670,15 +670,20 @@ EOF
   enable_display_manager
 }
 
-install_portainer_agent() {
+install_portainer_standalone() {
   if [[ "$INSTALL_PORTAINER" != "yes" ]]; then
-    log "Skipping Portainer agent deployment"
+    log "Skipping Portainer deployment"
     return
   fi
 
   if ! command -v docker >/dev/null 2>&1; then
-    log "Skipping Portainer agent; Docker is not available"
+    log "Skipping Portainer; Docker is not available"
     return
+  fi
+
+  if docker ps -a --format '{{.Names}}' | grep -Fxq portainer-agent; then
+    log "Removing legacy Portainer agent container"
+    docker rm -f portainer-agent >/dev/null 2>&1 || true
   fi
 
   if docker ps -a --format '{{.Names}}' | grep -Fxq "$PORTAINER_CONTAINER_NAME"; then
@@ -686,31 +691,32 @@ install_portainer_agent() {
       log "Force Portainer redeploy enabled; removing existing container"
       docker rm -f "$PORTAINER_CONTAINER_NAME" >/dev/null 2>&1 || true
     else
-      log "Portainer agent container already exists; ensuring it is running"
+      log "Portainer container already exists; ensuring it is running"
       docker start "$PORTAINER_CONTAINER_NAME" >/dev/null 2>&1 || true
       if is_container_running "$PORTAINER_CONTAINER_NAME"; then
-        log "Portainer agent container is running"
+        log "Portainer container is running"
       else
-        log "WARNING: Portainer agent container exists but is not running"
+        log "WARNING: Portainer container exists but is not running"
         docker ps -a --filter "name=$PORTAINER_CONTAINER_NAME" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
       fi
       return
     fi
   fi
 
-  log "Deploying Portainer agent container"
+  log "Deploying standalone Portainer server container"
   docker run -d \
     --name "$PORTAINER_CONTAINER_NAME" \
     --restart=always \
-    -p 9001:9001 \
+    -p 9000:9000 \
+    -p 9443:9443 \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v /var/lib/docker/volumes:/var/lib/docker/volumes \
-    portainer/agent
+    -v /opt/portainer:/data \
+    portainer/portainer-ce:latest
 
   if is_container_running "$PORTAINER_CONTAINER_NAME"; then
-    log "Portainer agent deployed and running"
+    log "Portainer server deployed and running"
   else
-    log "WARNING: Portainer agent deployment completed but container is not running"
+    log "WARNING: Portainer deployment completed but container is not running"
     docker ps -a --filter "name=$PORTAINER_CONTAINER_NAME" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
   fi
 }
@@ -732,6 +738,13 @@ configure_firewall() {
     log "UFW rule for XRDP (3389/tcp) already present"
   else
     ufw allow 3389/tcp
+  fi
+
+  if ufw status | grep -Eqi '(^|\s)(9000/tcp|9443/tcp)(\s|$)'; then
+    log "UFW rules for Portainer already present"
+  else
+    ufw allow 9000/tcp
+    ufw allow 9443/tcp
   fi
 
   ufw --force enable
@@ -795,7 +808,7 @@ main() {
   configure_desktop
 
   print_banner "PORTAINER AGENT DEPLOYMENT"
-  install_portainer_agent
+  install_portainer_standalone
 
   print_banner "LIBRENMS DIRECTORY PREPARATION"
   prepare_librenms_path
