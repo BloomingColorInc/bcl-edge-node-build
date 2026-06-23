@@ -328,6 +328,118 @@ Defaults:
 * `FORCE_NETBIRD_REENROLL=no` (set to `yes` to force `netbird down` then `netbird up`)
 * `FORCE_PORTAINER_REDEPLOY=no` (set to `yes` to recreate the Portainer agent container)
 
+## Tertiary: Direct CLI Commands
+
+Beyond bootstrap provisioning, `scripts/edge-node-ops.sh` supports direct command invocation for non-interactive workflows, monitoring, and troubleshooting. This is ideal for automation, cron jobs, CI/CD pipelines, and remote diagnostics over SSH.
+
+### Interactive Menu (Default)
+
+Launch the full operations menu:
+
+```bash
+bash scripts/edge-node-ops.sh
+```
+
+or explicitly:
+
+```bash
+bash scripts/edge-node-ops.sh menu
+```
+
+### Health Check
+
+Quick validation of all key services and container state:
+
+```bash
+bash scripts/edge-node-ops.sh quick-health
+```
+
+Aliases: `health`
+
+Output includes:
+* systemd service states (docker, netbird, chrony, snmpd, xrdp)
+* Running Docker containers
+* Portainer agent status
+* LibreNMS poller container status
+* NetBird peer state
+
+### Network Interface Report
+
+Display comprehensive network configuration and interface details:
+
+```bash
+bash scripts/edge-node-ops.sh network-report
+```
+
+Aliases: `network`, `net`, `net-report`
+
+Output includes:
+* Interface state and traffic counters (RX/TX packets/bytes)
+* IPv4 and IPv6 addresses per interface
+* IPv4 and IPv6 routing tables
+* Default routes
+* DNS resolver configuration
+* NetworkManager device connectivity state
+* Per-interface hardware details (MAC, MTU, speed, duplex, driver, ethtool info)
+
+Example for scripting:
+
+```bash
+# Capture network state for logging
+bash scripts/edge-node-ops.sh net-report | tee network-check-$(date +%s).log
+```
+
+### Save Network Interface Report
+
+Generate and save a full network report to timestamped diagnostics file:
+
+```bash
+bash scripts/edge-node-ops.sh network-report-save
+```
+
+Aliases: `network-save`, `net-save`, `net-report-save`
+
+Report file location: `diagnostics/network-interface-report-YYYYmmdd-HHMMSS.log`
+
+Useful for:
+* Ticket attachments
+* SLA documentation
+* Baseline comparisons
+* Automated troubleshooting workflows
+
+Example for periodic diagnostics capture:
+
+```bash
+# Add to crontab: capture network state every 6 hours
+0 */6 * * * cd /home/netadmin/Documents/bcl-edge-node-build && bash scripts/edge-node-ops.sh network-report-save
+```
+
+### Desktop and Chrome Diagnostics
+
+Collect comprehensive XFCE desktop, Chrome, and display configuration diagnostics:
+
+```bash
+bash scripts/edge-node-ops.sh diagnostics
+```
+
+Aliases: `desktop-diagnostics`
+
+Report file location: `diagnostics/desktop-chrome-diagnostics-YYYYmmdd-HHMMSS.log`
+
+Captures:
+* Browser default application registry
+* Chrome launch tests and profile paths
+* XFCE configuration and wallpaper settings
+* Display settings and session logs
+* Chrome debug logs (if available)
+* Autostart entries and running display processes
+
+Use when troubleshooting:
+* Browser launch failures
+* XRDP desktop not appearing
+* Wallpaper or display issues
+* Chrome sandbox or permission errors
+
 ---
 
 # 7. Configure Networking

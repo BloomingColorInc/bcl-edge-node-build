@@ -967,6 +967,139 @@ quick_health_check() {
   fi
 }
 
+network_interface_report_core() {
+  if ! command_exists ip; then
+    warn "ip command is required but was not found."
+    return 1
+  fi
+
+  say "Network Interface Report"
+  printf 'Host: %s\n' "$(hostname)"
+  printf 'Generated: %s\n' "$(date -Is)"
+
+  echo
+  say "Interface State (brief)"
+  ip -br link || true
+
+  echo
+  say "Traffic Counters (RX/TX)"
+  ip -s -br link || true
+
+  echo
+  say "IPv4 Addresses"
+  ip -br -4 addr || true
+
+  echo
+  say "IPv6 Addresses"
+  ip -br -6 addr || true
+
+  echo
+  say "Routing Tables"
+  printf 'IPv4 routes:\n'
+  ip -4 route show table main || true
+  echo
+  printf 'IPv6 routes:\n'
+  ip -6 route show table main || true
+
+  echo
+  say "Default Route"
+  ip route show default || true
+  ip -6 route show default || true
+
+  echo
+  say "DNS Resolver"
+  if command_exists resolvectl; then
+    resolvectl dns || true
+    resolvectl domain || true
+  else
+    grep -E '^(nameserver|search)' /etc/resolv.conf 2>/dev/null || true
+  fi
+
+  echo
+  say "NetworkManager Device State"
+  if command_exists nmcli; then
+    nmcli --terse --fields DEVICE,TYPE,STATE,CONNECTION device status || true
+  else
+    warn "nmcli not found (NetworkManager CLI not installed)."
+  fi
+
+  echo
+  say "Per-Interface Details"
+  local iface operstate mtu mac speed duplex carrier driver ipv4_addrs ipv6_addrs
+  while IFS= read -r iface; do
+    [[ -n "$iface" ]] || continue
+
+    operstate="$(cat "/sys/class/net/${iface}/operstate" 2>/dev/null || echo unknown)"
+    mtu="$(cat "/sys/class/net/${iface}/mtu" 2>/dev/null || echo unknown)"
+    mac="$(cat "/sys/class/net/${iface}/address" 2>/dev/null || echo unknown)"
+    carrier="$(cat "/sys/class/net/${iface}/carrier" 2>/dev/null || echo unknown)"
+    speed="$(cat "/sys/class/net/${iface}/speed" 2>/dev/null || echo unknown)"
+    duplex="$(cat "/sys/class/net/${iface}/duplex" 2>/dev/null || echo unknown)"
+    driver="$(basename "$(readlink -f "/sys/class/net/${iface}/device/driver" 2>/dev/null || echo unknown)")"
+
+    ipv4_addrs="$(ip -o -4 addr show dev "$iface" scope global 2>/dev/null | awk '{print $4}' | paste -sd ',' -)"
+    ipv6_addrs="$(ip -o -6 addr show dev "$iface" scope global 2>/dev/null | awk '{print $4}' | paste -sd ',' -)"
+
+    [[ -n "$ipv4_addrs" ]] || ipv4_addrs="none"
+    [[ -n "$ipv6_addrs" ]] || ipv6_addrs="none"
+
+    printf '\n[%s]\n' "$iface"
+    printf '  state:   %s\n' "$operstate"
+    printf '  carrier: %s\n' "$carrier"
+    printf '  mtu:     %s\n' "$mtu"
+    printf '  mac:     %s\n' "$mac"
+    printf '  speed:   %s\n' "$speed"
+    printf '  duplex:  %s\n' "$duplex"
+    printf '  driver:  %s\n' "$driver"
+    printf '  ipv4:    %s\n' "$ipv4_addrs"
+    printf '  ipv6:    %s\n' "$ipv6_addrs"
+
+    if command_exists ethtool && [[ "$iface" != "lo" ]]; then
+      local ethtool_summary
+      ethtool_summary="$(ethtool "$iface" 2>/dev/null | awk -F': ' '/Speed|Duplex|Port|Link detected/ {printf "%s=%s ", $1, $2}')"
+      if [[ -n "$ethtool_summary" ]]; then
+        printf '  ethtool: %s\n' "$ethtool_summary"
+      fi
+    fi
+  done < <(ls /sys/class/net 2>/dev/null | sort)
+}
+
+network_interface_report() {
+  ui_clear
+  network_interface_report_core
+}
+
+network_interface_report_save() {
+  ui_clear
+
+  local timestamp diagnostics_dir report_file report_rc=0
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  diagnostics_dir="$REPO_ROOT/diagnostics"
+  report_file="$diagnostics_dir/network-interface-report-${timestamp}.log"
+
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    runuser -u "$SUDO_USER" -- mkdir -p "$diagnostics_dir" 2>/dev/null || mkdir -p "$diagnostics_dir"
+  else
+    mkdir -p "$diagnostics_dir"
+  fi
+
+  if ! NO_COLOR=1 network_interface_report_core >"$report_file" 2>&1; then
+    report_rc=$?
+  fi
+
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER":"$SUDO_USER" "$report_file" 2>/dev/null || true
+  fi
+
+  if [[ "$report_rc" -eq 0 ]]; then
+    ok "Network interface report saved: $report_file"
+    return 0
+  fi
+
+  warn "Network interface report encountered errors. Partial report saved: $report_file"
+  return "$report_rc"
+}
+
 collect_desktop_chrome_diagnostics() {
   ui_clear
 
@@ -1056,8 +1189,9 @@ main_menu() {
       "4) LibreNMS Poller Agent" \
       "5) Quick Health Check" \
       "6) Run Bootstrap in Repair Mode" \
-      "7) Collect Desktop/Chrome Diagnostics"
-
+      "7) Collect Desktop/Chrome Diagnostics" \
+      "8) Network Interface Report" \
+      "9) Save Network Interface Report"
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
     local choice
@@ -1070,10 +1204,47 @@ main_menu() {
       5) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
       6) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
       7) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
+      8) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
+      9) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
-    esac
-  done
+    esac  done
 }
 
-main_menu
+run_cli_command() {
+  local cmd="${1:-}"
+
+  case "${cmd}" in
+    menu)
+      main_menu
+      ;;
+    health|quick-health)
+      quick_health_check
+      ;;
+    network|net|network-report|net-report)
+      network_interface_report
+      ;;
+    network-save|net-save|network-report-save|net-report-save)
+      network_interface_report_save
+      ;;
+    diagnostics|desktop-diagnostics)
+      collect_desktop_chrome_diagnostics
+      ;;
+    *)      fail "Unknown command: ${cmd}"
+      echo "Usage:"
+      echo "  bash scripts/edge-node-ops.sh                     # interactive menu"
+      echo "  bash scripts/edge-node-ops.sh menu                # interactive menu"
+      echo "  bash scripts/edge-node-ops.sh quick-health        # quick health check"
+      echo "  bash scripts/edge-node-ops.sh network-report      # network interface report"
+      echo "  bash scripts/edge-node-ops.sh network-report-save # save network report to diagnostics"
+      echo "  bash scripts/edge-node-ops.sh diagnostics         # desktop/chrome diagnostics"
+      return 1      ;;
+  esac
+}
+
+if (( $# > 0 )); then
+  check_required_files
+  run_cli_command "$1"
+else
+  main_menu
+fi

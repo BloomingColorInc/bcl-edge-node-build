@@ -1,0 +1,143 @@
+INFO: Network Interface Report
+Host: DEV-26-04
+Generated: 2026-06-23T11:39:29-05:00
+
+INFO: Interface State (brief)
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+ens33            UP             00:0c:29:83:8d:ad <BROADCAST,MULTICAST,UP,LOWER_UP> 
+br-8a160d1a6e88  UP             d6:54:df:16:9a:d3 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+docker0          DOWN           36:e6:ad:2e:9f:86 <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+br-f00544a11313  DOWN           9e:68:a1:e9:ad:5b <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+veth76f82ae@if2  UP             de:0c:1c:45:5c:8b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+
+INFO: Traffic Counters (RX/TX)
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+ens33            UP             00:0c:29:83:8d:ad <BROADCAST,MULTICAST,UP,LOWER_UP> 
+br-8a160d1a6e88  UP             d6:54:df:16:9a:d3 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+docker0          DOWN           36:e6:ad:2e:9f:86 <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+br-f00544a11313  DOWN           9e:68:a1:e9:ad:5b <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+veth76f82ae@if2  UP             de:0c:1c:45:5c:8b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+
+INFO: IPv4 Addresses
+lo               UNKNOWN        127.0.0.1/8 
+ens33            UP             172.31.99.228/20 
+br-8a160d1a6e88  UP             172.19.0.1/16 
+docker0          DOWN           172.17.0.1/16 
+br-f00544a11313  DOWN           172.18.0.1/16 
+
+INFO: IPv6 Addresses
+lo               UNKNOWN        ::1/128 
+ens33            UP             fe80::20c:29ff:fe83:8dad/64 
+br-8a160d1a6e88  UP             fe80::d454:dfff:fe16:9ad3/64 
+veth76f82ae@ens33 UP             fe80::dc0c:1cff:fe45:5c8b/64 
+
+INFO: Routing Tables
+IPv4 routes:
+default via 172.31.96.1 dev ens33 proto dhcp src 172.31.99.228 metric 100 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.18.0.0/16 dev br-f00544a11313 proto kernel scope link src 172.18.0.1 linkdown 
+172.19.0.0/16 dev br-8a160d1a6e88 proto kernel scope link src 172.19.0.1 
+172.31.96.0/20 dev ens33 proto kernel scope link src 172.31.99.228 metric 100 
+
+IPv6 routes:
+fe80::/64 dev br-8a160d1a6e88 proto kernel metric 256 pref medium
+fe80::/64 dev veth76f82ae proto kernel metric 256 pref medium
+fe80::/64 dev ens33 proto kernel metric 1024 pref medium
+
+INFO: Default Route
+default via 172.31.96.1 dev ens33 proto dhcp src 172.31.99.228 metric 100 
+
+INFO: DNS Resolver
+Global:
+Link 2 (ens33): 172.31.96.1
+Link 3 (br-8a160d1a6e88):
+Link 4 (docker0):
+Link 5 (br-f00544a11313):
+Link 8 (veth76f82ae):
+Global:
+Link 2 (ens33): mshome.net
+Link 3 (br-8a160d1a6e88):
+Link 4 (docker0):
+Link 5 (br-f00544a11313):
+Link 8 (veth76f82ae):
+
+INFO: NetworkManager Device State
+ens33:ethernet:connected:netplan-ens33
+br-8a160d1a6e88:bridge:connected (externally):br-8a160d1a6e88
+lo:loopback:connected (externally):lo
+br-f00544a11313:bridge:connected (externally):br-f00544a11313
+docker0:bridge:connected (externally):docker0
+veth76f82ae:ethernet:unmanaged:
+
+INFO: Per-Interface Details
+
+[br-8a160d1a6e88]
+  state:   up
+  carrier: 1
+  mtu:     1500
+  mac:     d6:54:df:16:9a:d3
+  speed:   10000
+  duplex:  unknown
+  driver:  unknown
+  ipv4:    172.19.0.1/16
+  ipv6:    none
+  ethtool: 	Speed=10000Mb/s 	Duplex=Unknown! (255) 	Port=Other 	Link detected=yes 
+
+[br-f00544a11313]
+  state:   down
+  carrier: 0
+  mtu:     1500
+  mac:     9e:68:a1:e9:ad:5b
+  speed:   -1
+  duplex:  unknown
+  driver:  unknown
+  ipv4:    172.18.0.1/16
+  ipv6:    none
+  ethtool: 	Speed=Unknown! 	Duplex=Unknown! (255) 	Port=Other 	Link detected=no 
+
+[docker0]
+  state:   down
+  carrier: 0
+  mtu:     1500
+  mac:     36:e6:ad:2e:9f:86
+  speed:   -1
+  duplex:  unknown
+  driver:  unknown
+  ipv4:    172.17.0.1/16
+  ipv6:    none
+  ethtool: 	Speed=Unknown! 	Duplex=Unknown! (255) 	Port=Other 	Link detected=no 
+
+[ens33]
+  state:   up
+  carrier: 1
+  mtu:     1500
+  mac:     00:0c:29:83:8d:ad
+  speed:   1000
+  duplex:  full
+  driver:  e1000
+  ipv4:    172.31.99.228/20
+  ipv6:    none
+  ethtool: 	Speed=1000Mb/s 	Duplex=Full 	Port=Twisted Pair 	Link detected=yes 
+
+[lo]
+  state:   unknown
+  carrier: 1
+  mtu:     65536
+  mac:     00:00:00:00:00:00
+  speed:   unknown
+  duplex:  unknown
+  driver:  unknown
+  ipv4:    none
+  ipv6:    none
+
+[veth76f82ae]
+  state:   up
+  carrier: 1
+  mtu:     1500
+  mac:     de:0c:1c:45:5c:8b
+  speed:   10000
+  duplex:  full
+  driver:  unknown
+  ipv4:    none
+  ipv6:    none
+  ethtool: 	Speed=10000Mb/s 	Duplex=Full 	Port=Twisted Pair 	Link detected=yes 
