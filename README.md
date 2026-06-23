@@ -461,7 +461,7 @@ Example:
 ```yaml
 network:
  version: 2
- renderer: networkd
+ renderer: NetworkManager
 
  ethernets:
    eno1:
@@ -484,6 +484,10 @@ Apply:
 ```bash
 sudo netplan apply
 ```
+
+Note:
+Desktop-enabled bootstrap runs now force NetworkManager ownership so interfaces are available in
+`nmcli`, `nm-applet`, and `nm-connection-editor`.
 
 ---
 

@@ -60,6 +60,8 @@ DESKTOP_PACKAGES=(
   network-manager-gnome
 )
 
+NETPLAN_RENDERER_FILE="/etc/netplan/99-bcl-network-manager-renderer.yaml"
+
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
 }
@@ -473,6 +475,61 @@ EOF
   log "Configured LightDM for local XFCE sessions"
 }
 
+configure_network_manager_for_desktop() {
+  local nm_conf="/etc/NetworkManager/NetworkManager.conf"
+  local nm_conf_backup="/etc/NetworkManager/NetworkManager.conf.bcl-edge.bak"
+
+  install -d -m 0755 /etc/NetworkManager
+
+  if [[ -f "$nm_conf" && ! -f "$nm_conf_backup" ]]; then
+    cp -a "$nm_conf" "$nm_conf_backup"
+    log "Backed up existing NetworkManager config to $nm_conf_backup"
+  fi
+
+  cat > "$nm_conf" <<'EOF'
+[main]
+plugins=ifupdown,keyfile
+
+[ifupdown]
+managed=true
+
+[device]
+wifi.scan-rand-mac-address=no
+EOF
+
+  install -d -m 0755 /etc/netplan
+  cat > "$NETPLAN_RENDERER_FILE" <<'EOF'
+network:
+  version: 2
+  renderer: NetworkManager
+EOF
+
+  netplan generate >/dev/null
+  netplan apply >/dev/null
+
+  systemctl restart NetworkManager
+  log "Configured NetworkManager to manage interfaces and applied netplan renderer=NetworkManager"
+}
+
+configure_nm_applet_autostart() {
+  local user_name="$1"
+  local user_home="$2"
+  local autostart_dir="$user_home/.config/autostart"
+  local user_nm_applet_desktop="$autostart_dir/nm-applet.desktop"
+  local system_nm_applet_desktop="/etc/xdg/autostart/nm-applet.desktop"
+
+  install -d -m 0755 "$autostart_dir"
+
+  if [[ -f "$system_nm_applet_desktop" ]]; then
+    cp "$system_nm_applet_desktop" "$user_nm_applet_desktop"
+    chown "$user_name":"$user_name" "$user_nm_applet_desktop"
+    chmod 0644 "$user_nm_applet_desktop"
+    log "Enabled NetworkManager applet autostart for $user_name"
+  else
+    log "Skipping nm-applet autostart; $system_nm_applet_desktop not found"
+  fi
+}
+
 configure_gnome_keyring_for_desktop() {
   local lightdm_pam_file="/etc/pam.d/lightdm"
   local xrdp_pam_file="/etc/pam.d/xrdp-sesman"
@@ -599,6 +656,7 @@ configure_desktop() {
   fi
 
   install_packages "${DESKTOP_PACKAGES[@]}"
+  configure_network_manager_for_desktop
   install_google_chrome
   if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
     install_wallpaper_asset
@@ -622,6 +680,7 @@ EOF
     chown "$ADMIN_USER":"$ADMIN_USER" "$user_home/.xsession"
     chmod 755 "$user_home/.xsession"
     configure_default_browser_for_user "$ADMIN_USER" "$user_home"
+    configure_nm_applet_autostart "$ADMIN_USER" "$user_home"
     if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
       configure_xfce_wallpaper "$ADMIN_USER" "$user_home"
     else
