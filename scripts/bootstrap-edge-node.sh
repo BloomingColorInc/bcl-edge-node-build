@@ -56,6 +56,8 @@ DESKTOP_PACKAGES=(
   xubuntu-default-settings
   xrdp
   xorgxrdp
+  network-manager
+  network-manager-gnome
 )
 
 log() {
