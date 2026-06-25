@@ -597,6 +597,41 @@ EOF
   log "Configured XFCE wallpaper for $user_name"
 }
 
+configure_wallpaper_session_hook() {
+  local user_name="$1"
+  local user_home="$2"
+  local xprofile_file="$user_home/.xprofile"
+  local wallpaper_setter_script="$user_home/.local/bin/bloomingedge-set-wallpaper.sh"
+  local marker="# bcl-edge wallpaper hook"
+
+  if [[ ! -f "$wallpaper_setter_script" ]]; then
+    log "Skipping wallpaper session hook; wallpaper helper not found at $wallpaper_setter_script"
+    return
+  fi
+
+  if [[ ! -f "$xprofile_file" ]]; then
+    cat > "$xprofile_file" <<EOF
+#!/bin/sh
+$marker
+if [ -x "$wallpaper_setter_script" ]; then
+  "$wallpaper_setter_script" >/dev/null 2>&1 || true
+fi
+EOF
+  elif ! grep -Fq "$marker" "$xprofile_file"; then
+    cat >> "$xprofile_file" <<EOF
+
+$marker
+if [ -x "$wallpaper_setter_script" ]; then
+  "$wallpaper_setter_script" >/dev/null 2>&1 || true
+fi
+EOF
+  fi
+
+  chown "$user_name":"$user_name" "$xprofile_file"
+  chmod 0755 "$xprofile_file"
+  log "Configured wallpaper session hook for $user_name"
+}
+
 configure_lightdm() {
   local lightdm_dir="/etc/lightdm/lightdm.conf.d"
   local lightdm_conf="${lightdm_dir}/50-bcl-edge.conf"
@@ -819,6 +854,7 @@ EOF
     configure_nm_applet_autostart "$ADMIN_USER" "$user_home"
     if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
       configure_xfce_wallpaper "$ADMIN_USER" "$user_home"
+      configure_wallpaper_session_hook "$ADMIN_USER" "$user_home"
     else
       log "Skipping XFCE wallpaper configuration"
     fi
