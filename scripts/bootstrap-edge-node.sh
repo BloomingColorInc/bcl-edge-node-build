@@ -486,7 +486,7 @@ EOF
 
   install -d -m 0755 "$autostart_dir" "$xfce_autostart_dir" "$local_bin_dir"
 
-  cat > "$wallpaper_setter_script" <<EOF
+  cat > "$wallpaper_setter_script" <<'EOF'
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -496,98 +496,33 @@ if [[ "${1:-}" != "--worker" ]]; then
   exit 0
 fi
 
-wallpaper_path="$WALLPAPER_TARGET_PATH"
+WALLPAPER_SOURCE="$HOME/bcl-edge-node-build/img/BloomingEdge_Network.png"
+WALLPAPER_TARGET="/usr/share/backgrounds/BloomingEdge_Network.png"
 
-if ! command -v xfconf-query >/dev/null 2>&1; then
-  exit 0
+# Ensure the file exists at the source
+if [[ ! -f "$WALLPAPER_SOURCE" ]]; then
+  exit 1
 fi
 
-apply_wallpaper_once() {
-  local props=""
-  local workspace_base=""
+# Copy to system location
+sudo cp "$WALLPAPER_SOURCE" "$WALLPAPER_TARGET"
+sudo chmod 0644 "$WALLPAPER_TARGET"
 
-  props="\$(xfconf-query -c xfce4-desktop -l 2>/dev/null || true)"
+# Wait for XFCE to be ready
+sleep 3
 
-  if [[ -n "\$props" ]]; then
-    while IFS= read -r prop; do
-      [[ -n "\$prop" ]] || continue
-      if [[ "\$prop" == */last-image ]]; then
-        xfconf-query -c xfce4-desktop -p "\$prop" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-      elif [[ "\$prop" == */image-path ]]; then
-        xfconf-query -c xfce4-desktop -p "\$prop" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-      elif [[ "\$prop" == */image-show ]]; then
-        xfconf-query -c xfce4-desktop -p "\$prop" -n -t bool -s true >/dev/null 2>&1 || true
-      elif [[ "\$prop" == */color-style ]]; then
-        xfconf-query -c xfce4-desktop -p "\$prop" -n -t int -s 0 >/dev/null 2>&1 || true
-      elif [[ "\$prop" == */image-style ]]; then
-        xfconf-query -c xfce4-desktop -p "\$prop" -n -t int -s 5 >/dev/null 2>&1 || true
-      fi
-
-      if [[ "\$prop" =~ ^/backdrop/screen[0-9]+/[^/]+/workspace[0-9]+/ ]]; then
-        workspace_base="\${prop%/*}"
-        xfconf-query -c xfce4-desktop -p "\$workspace_base/last-image" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-        xfconf-query -c xfce4-desktop -p "\$workspace_base/image-style" -n -t int -s 5 >/dev/null 2>&1 || true
-        xfconf-query -c xfce4-desktop -p "\$workspace_base/color-style" -n -t int -s 0 >/dev/null 2>&1 || true
-      fi
-    done <<< "\$props"
-  fi
-
-  # Ensure fallback keys exist for fresh profiles and virtual/XRDP monitors.
-  xfconf-query -c xfce4-desktop -p /backdrop/single-workspace-mode -n -t bool -s true >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/single-workspace-number -n -t int -s 0 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-path -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-show -n -t bool -s true >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace1/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace1/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace2/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace2/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace3/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace3/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/color-style -n -t int -s 0 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/color-style -n -t int -s 0 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/color-style -n -t int -s 0 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/color-style -n -t int -s 0 >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
-
-  # Prevent XFCE from repeatedly opening display settings on XRDP virtual displays.
-  xfconf-query -c displays -p /Notify -n -t bool -s false >/dev/null 2>&1 || true
-  xfconf-query -c displays -p /AutoEnableProfiles -n -t bool -s false >/dev/null 2>&1 || true
-}
-
-# Allow XFCE/XRDP monitor properties to settle, then enforce wallpaper repeatedly.
-for _ in 1 2 3 4 5 6 7 8; do
-  apply_wallpaper_once
-  sleep 2
-done
-
-# Some first-login XRDP sessions apply defaults later; enforce again after that phase.
-sleep 20
-for _ in 1 2 3 4 5; do
-  apply_wallpaper_once
-  sleep 2
-done
-
-# If display settings dialog appears, close it after applying profile/wallpaper.
-pkill -x xfce4-display-settings >/dev/null 2>&1 || true
-
-# Keep suppressing for a short window while XFCE startup components settle.
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  pkill -x xfce4-display-settings >/dev/null 2>&1 || true
-  sleep 2
-done
-
-if command -v xfdesktop >/dev/null 2>&1; then
+# Set it using xfconf-query - discover ALL monitors dynamically
+if command -v xfconf-query >/dev/null 2>&1; then
+  # Get ALL last-image properties from all monitors
+  xfconf-query -c xfce4-desktop -l 2>/dev/null | grep 'last-image' | while read -r prop; do
+    xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER_TARGET" -t string 2>/dev/null || true
+    
+    # Also set image-style to 5 (scaled) for the same path
+    style_prop="${prop%/last-image}/image-style"
+    xfconf-query -c xfce4-desktop -p "$style_prop" -s 5 -t int 2>/dev/null || true
+  done
+  
+  # Reload desktop
   xfdesktop --reload >/dev/null 2>&1 || true
 fi
 EOF
