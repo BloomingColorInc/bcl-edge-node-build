@@ -134,6 +134,8 @@ netadmin
 
 Reboot.
 
+> **IMPORTANT:** During the OS installation, configure a static IP address for the edge node instead of DHCP. When the NetworkManager GUI is installed during bootstrap, the network interface will restart and DHCP will re-negotiate, resulting in a new IP address assignment. Using a static IP during initial installation prevents this disruption to remote access.
+
 After the initial installation, SSH is available for remote management and for copying and pasting the commands in this guide from another machine.
 
 Connect from your management workstation:

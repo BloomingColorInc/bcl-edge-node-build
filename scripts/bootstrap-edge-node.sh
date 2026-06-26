@@ -862,7 +862,6 @@ configure_desktop() {
   fi
 
   install_packages "${DESKTOP_PACKAGES[@]}"
-  configure_network_manager_for_desktop
   install_google_chrome
   if [[ "$INSTALL_BLOOMINGEDGE_WALLPAPER" == "yes" ]]; then
     install_wallpaper_asset
@@ -896,6 +895,8 @@ EOF
   else
     log "Skipping user session configuration; user $ADMIN_USER does not exist"
   fi
+
+  configure_network_manager_for_desktop
 
   log "Configuring XRDP to start XFCE"
   cat > /etc/xrdp/startwm.sh <<'EOF'
