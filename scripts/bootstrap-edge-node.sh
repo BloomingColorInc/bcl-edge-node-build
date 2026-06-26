@@ -512,6 +512,12 @@ apply_wallpaper_once() {
       [[ -n "\$prop" ]] || continue
       if [[ "\$prop" == */last-image ]]; then
         xfconf-query -c xfce4-desktop -p "\$prop" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+      elif [[ "\$prop" == */image-path ]]; then
+        xfconf-query -c xfce4-desktop -p "\$prop" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+      elif [[ "\$prop" == */image-show ]]; then
+        xfconf-query -c xfce4-desktop -p "\$prop" -n -t bool -s true >/dev/null 2>&1 || true
+      elif [[ "\$prop" == */color-style ]]; then
+        xfconf-query -c xfce4-desktop -p "\$prop" -n -t int -s 0 >/dev/null 2>&1 || true
       elif [[ "\$prop" == */image-style ]]; then
         xfconf-query -c xfce4-desktop -p "\$prop" -n -t int -s 5 >/dev/null 2>&1 || true
       fi
@@ -521,8 +527,13 @@ apply_wallpaper_once() {
   # Ensure fallback keys exist for fresh profiles and virtual/XRDP monitors.
   xfconf-query -c xfce4-desktop -p /backdrop/single-workspace-mode -n -t bool -s true >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/single-workspace-number -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-path -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-show -n -t bool -s true >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/color-style -n -t int -s 0 >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
 
