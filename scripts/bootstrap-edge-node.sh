@@ -504,6 +504,7 @@ fi
 
 apply_wallpaper_once() {
   local props=""
+  local workspace_base=""
 
   props="\$(xfconf-query -c xfce4-desktop -l 2>/dev/null || true)"
 
@@ -521,6 +522,13 @@ apply_wallpaper_once() {
       elif [[ "\$prop" == */image-style ]]; then
         xfconf-query -c xfce4-desktop -p "\$prop" -n -t int -s 5 >/dev/null 2>&1 || true
       fi
+
+      if [[ "\$prop" =~ ^/backdrop/screen[0-9]+/[^/]+/workspace[0-9]+/ ]]; then
+        workspace_base="\${prop%/*}"
+        xfconf-query -c xfce4-desktop -p "\$workspace_base/last-image" -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-desktop -p "\$workspace_base/image-style" -n -t int -s 5 >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-desktop -p "\$workspace_base/color-style" -n -t int -s 0 >/dev/null 2>&1 || true
+      fi
     done <<< "\$props"
   fi
 
@@ -531,9 +539,24 @@ apply_wallpaper_once() {
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-show -n -t bool -s true >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace1/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace1/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace2/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace2/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace3/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace3/image-style -n -t int -s 5 >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace0/color-style -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace1/color-style -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace2/color-style -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/image-style -n -t int -s 5 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorrdp0/workspace3/color-style -n -t int -s 0 >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/last-image -n -t string -s "\$wallpaper_path" >/dev/null 2>&1 || true
   xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/image-style -n -t int -s 5 >/dev/null 2>&1 || true
 
@@ -685,6 +708,7 @@ network:
   version: 2
   renderer: NetworkManager
 EOF
+  chmod 0600 "$NETPLAN_RENDERER_FILE"
 
   netplan generate >/dev/null
   netplan apply >/dev/null
