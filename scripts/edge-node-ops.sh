@@ -570,46 +570,46 @@ run_bootstrap_wizard() {
   return "$bootstrap_rc"
 }
 
-docker_stack_status() {
+librenms_stack_status() {
   ui_clear
-  say "Docker Stack Status"
+  say "LibreNMS Stack Status"
   run_compose ps
   echo
   say "Portainer (all states)"
   run_with_privilege docker ps -a --filter name=portainer --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
 
-docker_stack_up() {
-  say "Starting Docker stack..."
+librenms_stack_up() {
+  say "Starting LibreNMS stack..."
   run_compose up -d
-  ok "Docker stack started."
+  ok "LibreNMS stack started."
 }
 
-docker_stack_down() {
-  if ! confirm "Stop and remove the Docker stack?"; then
+librenms_stack_down() {
+  if ! confirm "Stop and remove the LibreNMS stack?"; then
     warn "Cancelled."
     return
   fi
 
-  say "Stopping Docker stack..."
+  say "Stopping LibreNMS stack..."
   run_compose down
-  ok "Docker stack stopped."
+  ok "LibreNMS stack stopped."
 }
 
-docker_stack_restart() {
-  say "Restarting Docker stack..."
+librenms_stack_restart() {
+  say "Restarting LibreNMS stack..."
   run_compose down
   run_compose up -d
-  ok "Docker stack restarted."
+  ok "LibreNMS stack restarted."
 }
 
-docker_stack_pull() {
+librenms_stack_pull() {
   say "Pulling latest images..."
   run_compose pull
   ok "Image pull complete."
 }
 
-docker_stack_logs() {
+librenms_stack_logs() {
   local service
   ui_clear
   read -r -p "Service name for logs (blank for all): " service
@@ -622,14 +622,14 @@ docker_stack_logs() {
   fi
 }
 
-docker_menu() {
+librenms_stack_menu() {
   while true; do
     [[ "${MAIN_MENU_REQUESTED}" == "1" ]] && return 0
     ui_clear
-    ui_panel_compact "Docker Stack Operations" "magenta" \
+    ui_panel_compact "LibreNMS Stack Operations" "magenta" \
       "Compose file: ${COMPOSE_FILE}" \
       "Project: ${COMPOSE_PROJECT_NAME}" \
-      "Manage stack lifecycle and logs."
+      "Manage LibreNMS stack lifecycle and logs."
     show_node_snapshot_lines
     ui_panel "Actions" "bright_magenta" \
       "1) Status" \
@@ -643,12 +643,160 @@ docker_menu() {
     local choice
     read -r -p "Select action > " choice
     case "$choice" in
-      1) if ! docker_stack_status; then warn "Status check failed."; fi; pause ;;
-      2) if ! docker_stack_up; then warn "Stack start failed."; fi; pause ;;
-      3) if ! docker_stack_down; then warn "Stack stop failed."; fi; pause ;;
-      4) if ! docker_stack_restart; then warn "Stack restart failed."; fi; pause ;;
-      5) if ! docker_stack_pull; then warn "Image pull failed."; fi; pause ;;
-      6) if ! docker_stack_logs; then warn "Log retrieval failed."; fi; pause ;;
+      1) if ! librenms_stack_status; then warn "Status check failed."; fi; pause ;;
+      2) if ! librenms_stack_up; then warn "Stack start failed."; fi; pause ;;
+      3) if ! librenms_stack_down; then warn "Stack stop failed."; fi; pause ;;
+      4) if ! librenms_stack_restart; then warn "Stack restart failed."; fi; pause ;;
+      5) if ! librenms_stack_pull; then warn "Image pull failed."; fi; pause ;;
+      6) if ! librenms_stack_logs; then warn "Log retrieval failed."; fi; pause ;;
+      b|B) return ;;
+      m|M|h|H) request_main_menu; return ;;
+      q|Q) exit 0 ;;
+      *) warn "Invalid choice"; pause ;;
+    esac
+  done
+}
+
+portainer_container_name() {
+  echo "${PORTAINER_CONTAINER_NAME:-portainer}"
+}
+
+portainer_status() {
+  ui_clear
+  say "Portainer Container Status"
+  local container_name
+  container_name="$(portainer_container_name)"
+  
+  if run_with_privilege docker ps -a --filter "name=^${container_name}$" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' | grep -q "$container_name"; then
+    run_with_privilege docker ps -a --filter "name=^${container_name}$" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+  else
+    warn "Portainer container '${container_name}' not found."
+  fi
+  
+  echo
+  say "Portainer container details"
+  run_with_privilege docker inspect "$container_name" 2>/dev/null | grep -E '(Id|Image|State|Ports)' || warn "Cannot retrieve container details."
+}
+
+portainer_start() {
+  local container_name
+  container_name="$(portainer_container_name)"
+  
+  say "Starting Portainer container '${container_name}'..."
+  if run_with_privilege docker start "$container_name" 2>/dev/null; then
+    ok "Portainer container started."
+    sleep 2
+    run_with_privilege docker ps --filter "name=^${container_name}$" --format 'table {{.Names}}\t{{.Status}}'
+  else
+    warn "Failed to start Portainer container. Container may not exist."
+  fi
+}
+
+portainer_stop() {
+  local container_name
+  container_name="$(portainer_container_name)"
+  
+  if ! confirm "Stop Portainer container '${container_name}'?"; then
+    warn "Cancelled."
+    return
+  fi
+  
+  say "Stopping Portainer container '${container_name}'..."
+  if run_with_privilege docker stop "$container_name" 2>/dev/null; then
+    ok "Portainer container stopped."
+  else
+    warn "Failed to stop Portainer container."
+  fi
+}
+
+portainer_restart() {
+  local container_name
+  container_name="$(portainer_container_name)"
+  
+  say "Restarting Portainer container '${container_name}'..."
+  if run_with_privilege docker restart "$container_name" 2>/dev/null; then
+    ok "Portainer container restarted."
+    sleep 2
+    run_with_privilege docker ps --filter "name=^${container_name}$" --format 'table {{.Names}}\t{{.Status}}'
+  else
+    warn "Failed to restart Portainer container."
+  fi
+}
+
+portainer_logs() {
+  local container_name lines_arg=""
+  container_name="$(portainer_container_name)"
+  
+  ui_clear
+  read -r -p "Number of log lines to display (blank for 100): " lines_arg
+  lines_arg="$(trim "$lines_arg")"
+  
+  if [[ -z "$lines_arg" || ! "$lines_arg" =~ ^[0-9]+$ ]]; then
+    lines_arg="100"
+  fi
+  
+  say "Portainer container logs (last ${lines_arg} lines)"
+  run_with_privilege docker logs --tail="$lines_arg" "$container_name" 2>/dev/null || warn "Failed to retrieve Portainer logs."
+}
+
+portainer_open_ui() {
+  local container_name container_ports http_port
+  container_name="$(portainer_container_name)"
+  
+  ui_clear
+  say "Portainer UI Information"
+  
+  say "Retrieving Portainer container information..."
+  container_ports="$(run_with_privilege docker inspect "$container_name" 2>/dev/null | grep -A 2 '"Ports"' || echo '')"
+  
+  if [[ -z "$container_ports" ]]; then
+    warn "Cannot retrieve port information for Portainer container."
+    say "Manually check: docker inspect $container_name"
+    return
+  fi
+  
+  http_port="$(echo "$container_ports" | grep -oP '0\.0\.0\.0:\K[0-9]+(?=/tcp)' | head -1)"
+  
+  if [[ -z "$http_port" ]]; then
+    say "Portainer port information:"
+    echo "$container_ports"
+    say "Typical Portainer URL: https://localhost:9443 (or https://<node-ip>:9443)"
+  else
+    say "Portainer UI is accessible at:"
+    say "  Local:   https://localhost:${http_port}"
+    say "  Remote:  https://$(hostname -I | awk '{print $1}'):${http_port}"
+    say ""
+    warn "HTTPS certificate will be self-signed. Accept browser warning to proceed."
+    say "Default credentials can be set during initial Portainer setup."
+  fi
+}
+
+portainer_stack_menu() {
+  while true; do
+    [[ "${MAIN_MENU_REQUESTED}" == "1" ]] && return 0
+    ui_clear
+    ui_panel_compact "Portainer Stack Operations" "magenta" \
+      "Container: $(portainer_container_name)" \
+      "Manage Portainer lifecycle and access."
+    show_node_snapshot_lines
+    ui_panel "Actions" "bright_magenta" \
+      "1) Status" \
+      "2) Start Container" \
+      "3) Stop Container" \
+      "4) Restart Container" \
+      "5) View Logs" \
+      "6) UI Information"
+    ui_nav_panel_full
+
+    local choice
+    read -r -p "Select action > " choice
+    case "$choice" in
+      1) if ! portainer_status; then warn "Status check failed."; fi; pause ;;
+      2) if ! portainer_start; then warn "Container start failed."; fi; pause ;;
+      3) if ! portainer_stop; then warn "Container stop failed."; fi; pause ;;
+      4) if ! portainer_restart; then warn "Container restart failed."; fi; pause ;;
+      5) if ! portainer_logs; then warn "Log retrieval failed."; fi; pause ;;
+      6) if ! portainer_open_ui; then warn "UI information retrieval failed."; fi; pause ;;
       b|B) return ;;
       m|M|h|H) request_main_menu; return ;;
       q|Q) exit 0 ;;
@@ -1184,28 +1332,30 @@ main_menu() {
     show_node_snapshot_lines
     ui_panel "Main Actions" "bright_magenta" \
       "1) Run Bootstrap Wizard" \
-      "2) Docker Stack Operations" \
-      "3) NetBird Operations" \
-      "4) LibreNMS Poller Agent" \
-      "5) Quick Health Check" \
-      "6) Run Bootstrap in Repair Mode" \
-      "7) Collect Desktop/Chrome Diagnostics" \
-      "8) Network Interface Report" \
-      "9) Save Network Interface Report"
+      "2) LibreNMS Stack Operations" \
+      "3) Portainer Stack Operations" \
+      "4) NetBird Operations" \
+      "5) LibreNMS Poller Agent" \
+      "6) Quick Health Check" \
+      "7) Run Bootstrap in Repair Mode" \
+      "8) Collect Desktop/Chrome Diagnostics" \
+      "9) Network Interface Report" \
+      "10) Save Network Interface Report"
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
     local choice
     read -r -p "Select action > " choice
     case "$choice" in
       1) if ! run_bootstrap_wizard; then warn "Bootstrap wizard failed."; fi; pause ;;
-      2) docker_menu ;;
-      3) netbird_menu ;;
-      4) librenms_poller_menu ;;
-      5) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
-      6) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
-      7) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
-      8) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
-      9) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
+      2) librenms_stack_menu ;;
+      3) portainer_stack_menu ;;
+      4) netbird_menu ;;
+      5) librenms_poller_menu ;;
+      6) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
+      7) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
+      8) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
+      9) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
+      10) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
     esac  done
