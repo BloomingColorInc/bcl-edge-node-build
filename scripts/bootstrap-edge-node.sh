@@ -496,17 +496,12 @@ if [[ "${1:-}" != "--worker" ]]; then
   exit 0
 fi
 
-WALLPAPER_SOURCE="$HOME/bcl-edge-node-build/img/BloomingEdge_Network.png"
 WALLPAPER_TARGET="/usr/share/backgrounds/BloomingEdge_Network.png"
 
-# Ensure the file exists at the source
-if [[ ! -f "$WALLPAPER_SOURCE" ]]; then
+# Verify the wallpaper file exists (it should have been installed by bootstrap)
+if [[ ! -f "$WALLPAPER_TARGET" ]]; then
   exit 1
 fi
-
-# Copy to system location
-sudo cp "$WALLPAPER_SOURCE" "$WALLPAPER_TARGET"
-sudo chmod 0644 "$WALLPAPER_TARGET"
 
 # Wait for XFCE to be ready
 sleep 3
