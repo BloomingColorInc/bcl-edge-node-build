@@ -728,15 +728,27 @@ portainer_logs() {
   container_name="$(portainer_container_name)"
   
   ui_clear
-  read -r -p "Number of log lines to display (blank for 100): " lines_arg
-  lines_arg="$(trim "$lines_arg")"
+  say "Retrieving logs for Portainer container: ${container_name}"
+  echo
   
-  if [[ -z "$lines_arg" || ! "$lines_arg" =~ ^[0-9]+$ ]]; then
-    lines_arg="100"
+  if ! run_with_privilege docker ps -a --filter "name=^${container_name}$" --format '{{.ID}}' | grep -q .; then
+    warn "Container '${container_name}' not found."
+    return 1
   fi
   
-  say "Portainer container logs (last ${lines_arg} lines)"
-  run_with_privilege docker logs --tail="$lines_arg" "$container_name" 2>/dev/null || warn "Failed to retrieve Portainer logs."
+  read -r -p "Number of log lines to display (blank for all): " lines_arg
+  lines_arg="$(trim "$lines_arg")"
+  
+  if [[ -z "$lines_arg" ]]; then
+    say "Displaying all available logs..."
+    run_with_privilege docker logs "$container_name"
+  elif [[ "$lines_arg" =~ ^[0-9]+$ ]]; then
+    say "Displaying last ${lines_arg} lines..."
+    run_with_privilege docker logs --tail="$lines_arg" "$container_name"
+  else
+    warn "Invalid line count. Please enter a number or leave blank for all logs."
+    return 1
+  fi
 }
 
 portainer_open_ui() {
