@@ -950,7 +950,8 @@ librenms_poller_deploy() {
   ui_clear
   ui_panel_compact "LibreNMS Poller Deployment" "magenta" \
     "Deploys a distributed LibreNMS dispatcher/poller container." \
-    "Use AWS Triad LibreNMS DB/Redis endpoints reachable over NetBird."
+    "Use AWS Triad LibreNMS DB/Redis endpoints reachable over NetBird." \
+    "If Redis runs on the same host as LibreNMS, leave REDIS_HOST blank to reuse DB_HOST."
 
   read -r -p "Container name [${container_name}]: " container_name
   container_name="$(trim "$container_name")"
@@ -985,15 +986,16 @@ librenms_poller_deploy() {
   echo
   db_password="$(trim "$db_password")"
 
-  read -r -p "AWS Triad Redis REDIS_HOST: " redis_host
+  read -r -p "AWS Triad Redis REDIS_HOST [same as DB_HOST]: " redis_host
   redis_host="$(trim "$redis_host")"
+  [[ -n "$redis_host" ]] || redis_host="$db_host"
 
   read -r -p "REDIS_PORT [${redis_port}]: " redis_port
   redis_port="$(trim "$redis_port")"
   [[ -n "$redis_port" ]] || redis_port="6379"
 
-  if [[ -z "$db_host" || -z "$db_name" || -z "$db_user" || -z "$db_password" || -z "$redis_host" ]]; then
-    warn "DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, and REDIS_HOST are required."
+  if [[ -z "$db_host" || -z "$db_name" || -z "$db_user" || -z "$db_password" ]]; then
+    warn "DB_HOST, DB_NAME, DB_USER, and DB_PASSWORD are required."
     return
   fi
 

@@ -578,7 +578,7 @@ During deployment, provide the AWS Triad LibreNMS backend values:
 
 * `DB_HOST` / `DB_PORT`
 * `DB_NAME` / `DB_USER` / `DB_PASSWORD`
-* `REDIS_HOST` / `REDIS_PORT`
+* `REDIS_HOST` / `REDIS_PORT` (`REDIS_HOST` can be left blank to reuse `DB_HOST` when Redis is on the same server)
 
 The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:latest` with distributed dispatcher mode enabled.
 
