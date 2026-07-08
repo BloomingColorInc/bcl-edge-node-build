@@ -470,6 +470,25 @@ prompt_yes_no_default() {
   esac
 }
 
+check_tcp_connectivity() {
+  local host="$1"
+  local port="$2"
+  local label="$3"
+
+  if ! command_exists timeout; then
+    warn "timeout is not installed; skipping ${label} connectivity check"
+    return 0
+  fi
+
+  if timeout 4 bash -c "</dev/tcp/${host}/${port}" >/dev/null 2>&1; then
+    ok "${label} reachable at ${host}:${port}"
+    return 0
+  fi
+
+  warn "${label} is not reachable at ${host}:${port} from this host"
+  return 1
+}
+
 run_bootstrap_wizard() {
   local forced_repair_mode="${1:-no}"
   local edge_admin_user="netadmin"
@@ -939,6 +958,8 @@ librenms_poller_deploy() {
   local container_name image_name node_id tz
   local db_host db_port db_name db_user db_password
   local redis_host redis_port
+  local use_host_network network_mode_args=()
+  local db_reachable="yes" redis_reachable="yes"
 
   container_name="$LIBRENMS_POLLER_CONTAINER_NAME"
   image_name="$LIBRENMS_POLLER_IMAGE"
@@ -946,6 +967,7 @@ librenms_poller_deploy() {
   tz="UTC"
   db_port="3306"
   redis_port="6379"
+  use_host_network="yes"
 
   ui_clear
   ui_panel_compact "LibreNMS Poller Deployment" "magenta" \
@@ -994,9 +1016,36 @@ librenms_poller_deploy() {
   redis_port="$(trim "$redis_port")"
   [[ -n "$redis_port" ]] || redis_port="6379"
 
+  use_host_network="$(prompt_yes_no_default "Use host network mode for NetBird/private DNS reachability" "yes")"
+
   if [[ -z "$db_host" || -z "$db_name" || -z "$db_user" || -z "$db_password" ]]; then
     warn "DB_HOST, DB_NAME, DB_USER, and DB_PASSWORD are required."
     return
+  fi
+
+  if ! [[ "$db_port" =~ ^[0-9]+$ ]] || ! [[ "$redis_port" =~ ^[0-9]+$ ]]; then
+    warn "DB_PORT and REDIS_PORT must be numeric values."
+    return
+  fi
+
+  say "Validating backend connectivity before deployment..."
+  if ! check_tcp_connectivity "$db_host" "$db_port" "MariaDB"; then
+    db_reachable="no"
+  fi
+  if ! check_tcp_connectivity "$redis_host" "$redis_port" "Redis"; then
+    redis_reachable="no"
+  fi
+
+  if [[ "$db_reachable" != "yes" || "$redis_reachable" != "yes" ]]; then
+    warn "One or more backend checks failed. Verify NetBird connectivity, DNS, firewall rules, and credentials."
+    if ! confirm "Continue and deploy poller container anyway?"; then
+      warn "Cancelled."
+      return
+    fi
+  fi
+
+  if [[ "$use_host_network" == "yes" ]]; then
+    network_mode_args=(--network host)
   fi
 
   if run_with_privilege docker ps -a --format '{{.Names}}' | grep -Fxq "$container_name"; then
@@ -1013,6 +1062,7 @@ librenms_poller_deploy() {
   run_with_privilege docker run -d \
     --name "$container_name" \
     --restart unless-stopped \
+    "${network_mode_args[@]}" \
     -e TZ="$tz" \
     -e SIDECAR_DISPATCHER="1" \
     -e DISPATCHER_NODE_ID="$node_id" \
