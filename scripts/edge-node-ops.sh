@@ -489,6 +489,74 @@ check_tcp_connectivity() {
   return 1
 }
 
+ensure_librenms_data_env() {
+  local image_name="$1"
+  local tz="$2"
+  local db_host="$3"
+  local db_port="$4"
+  local db_name="$5"
+  local db_user="$6"
+  local db_password="$7"
+  local redis_host="$8"
+  local redis_port="$9"
+  local use_host_network="${10}"
+  local init_container=""
+  local -a network_mode_args=()
+  local max_wait_seconds=90
+  local waited_seconds=0
+
+  if run_with_privilege test -f /opt/librenms/.env; then
+    ok "Existing /opt/librenms/.env found; skipping initialization"
+    return 0
+  fi
+
+  warn "/opt/librenms/.env not found. Bootstrapping LibreNMS data volume first."
+
+  if [[ "$use_host_network" == "yes" ]]; then
+    network_mode_args=(--network host)
+  fi
+
+  init_container="librenms-env-init-$RANDOM"
+
+  if ! run_with_privilege docker run -d \
+    --name "$init_container" \
+    --restart no \
+    "${network_mode_args[@]}" \
+    -e TZ="$tz" \
+    -e DB_HOST="$db_host" \
+    -e DB_PORT="$db_port" \
+    -e DB_NAME="$db_name" \
+    -e DB_USER="$db_user" \
+    -e DB_PASSWORD="$db_password" \
+    -e REDIS_HOST="$redis_host" \
+    -e REDIS_PORT="$redis_port" \
+    -v /opt/librenms:/data \
+    "$image_name" >/dev/null; then
+    warn "Failed to start temporary LibreNMS init container."
+    return 1
+  fi
+
+  while (( waited_seconds < max_wait_seconds )); do
+    if run_with_privilege test -f /opt/librenms/.env; then
+      ok "Initialized /opt/librenms/.env"
+      run_with_privilege docker rm -f "$init_container" >/dev/null 2>&1 || true
+      return 0
+    fi
+
+    if ! run_with_privilege docker ps --format '{{.Names}}' | grep -Fxq "$init_container"; then
+      break
+    fi
+
+    sleep 3
+    waited_seconds=$((waited_seconds + 3))
+  done
+
+  warn "Timed out waiting for /opt/librenms/.env initialization."
+  run_with_privilege docker logs --tail 120 "$init_container" || true
+  run_with_privilege docker rm -f "$init_container" >/dev/null 2>&1 || true
+  return 1
+}
+
 run_bootstrap_wizard() {
   local forced_repair_mode="${1:-no}"
   local edge_admin_user="netadmin"
@@ -973,7 +1041,8 @@ librenms_poller_deploy() {
   ui_panel_compact "LibreNMS Poller Deployment" "magenta" \
     "Deploys a distributed LibreNMS dispatcher/poller container." \
     "Use AWS Triad LibreNMS DB/Redis endpoints reachable over NetBird." \
-    "If Redis runs on the same host as LibreNMS, leave REDIS_HOST blank to reuse DB_HOST."
+    "If Redis runs on the same host as LibreNMS, leave REDIS_HOST blank to reuse DB_HOST." \
+    "If /data/.env is missing, the script auto-initializes it before sidecar deployment."
 
   read -r -p "Container name [${container_name}]: " container_name
   container_name="$(trim "$container_name")"
@@ -1057,6 +1126,21 @@ librenms_poller_deploy() {
   fi
 
   run_with_privilege mkdir -p /opt/librenms
+
+  if ! ensure_librenms_data_env \
+    "$image_name" \
+    "$tz" \
+    "$db_host" \
+    "$db_port" \
+    "$db_name" \
+    "$db_user" \
+    "$db_password" \
+    "$redis_host" \
+    "$redis_port" \
+    "$use_host_network"; then
+    warn "Unable to initialize LibreNMS data volume (.env missing)."
+    return
+  fi
 
   say "Deploying LibreNMS poller agent container..."
   run_with_privilege docker run -d \
