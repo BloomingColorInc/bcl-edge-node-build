@@ -658,41 +658,65 @@ run_bootstrap_wizard() {
 }
 
 librenms_stack_status() {
+  local -a services=(db redis librenms dispatcher)
   ui_clear
   say "LibreNMS Stack Status"
-  run_compose ps
+  if ! run_compose ps "${services[@]}"; then
+    fail "Unable to retrieve LibreNMS stack status."
+    return 1
+  fi
   echo
   say "Portainer (all states)"
   run_with_privilege docker ps -a --filter name=portainer --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
 
 librenms_stack_up() {
+  local -a services=(db redis librenms dispatcher)
   say "Starting LibreNMS stack..."
-  run_compose up -d
+  if ! run_compose up -d "${services[@]}"; then
+    fail "LibreNMS stack start failed."
+    return 1
+  fi
   ok "LibreNMS stack started."
 }
 
 librenms_stack_down() {
+  local -a services=(db redis librenms dispatcher)
   if ! confirm "Stop and remove the LibreNMS stack?"; then
     warn "Cancelled."
     return
   fi
 
   say "Stopping LibreNMS stack..."
-  run_compose down
+  if ! run_compose stop "${services[@]}"; then
+    fail "LibreNMS stack stop failed."
+    return 1
+  fi
+
+  if ! run_compose rm -f "${services[@]}"; then
+    fail "LibreNMS stack remove failed."
+    return 1
+  fi
   ok "LibreNMS stack stopped."
 }
 
 librenms_stack_restart() {
+  local -a services=(db redis librenms dispatcher)
   say "Restarting LibreNMS stack..."
-  run_compose down
-  run_compose up -d
+  if ! run_compose up -d --force-recreate "${services[@]}"; then
+    fail "LibreNMS stack restart failed."
+    return 1
+  fi
   ok "LibreNMS stack restarted."
 }
 
 librenms_stack_pull() {
+  local -a services=(db redis librenms dispatcher)
   say "Pulling latest images..."
-  run_compose pull
+  if ! run_compose pull "${services[@]}"; then
+    fail "Image pull failed."
+    return 1
+  fi
   ok "Image pull complete."
 }
 
