@@ -1,5 +1,7 @@
 services:
   db:
+    profiles:
+      - local-stack
     image: mariadb:10.11
     container_name: librenms-db
     restart: unless-stopped
@@ -17,11 +19,15 @@ services:
       - librenms-db:/var/lib/mysql
 
   redis:
+    profiles:
+      - local-stack
     image: redis:7-alpine
     container_name: librenms-redis
     restart: unless-stopped
 
   librenms:
+    profiles:
+      - local-stack
     image: librenms/librenms:latest
     container_name: librenms
     restart: unless-stopped
@@ -43,6 +49,8 @@ services:
       - librenms-data:/data
 
   dispatcher:
+    profiles:
+      - local-stack
     image: librenms/librenms:latest
     container_name: librenms-dispatcher
     restart: unless-stopped
@@ -63,17 +71,6 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
     volumes:
       - librenms-data:/data
-
-  portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer
-    restart: unless-stopped
-    ports:
-      - "9000:9000"
-      - "9443:9443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/portainer:/data
 
 volumes:
   librenms-data:
