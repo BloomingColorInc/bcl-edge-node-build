@@ -10,7 +10,7 @@ services:
       - --innodb-file-per-table=1
       - --lower-case-table-names=0
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Chicago}
       MARIADB_RANDOM_ROOT_PASSWORD: "yes"
       MARIADB_DATABASE: ${DB_NAME:-librenms}
       MARIADB_USER: ${DB_USER:-librenms}
@@ -37,7 +37,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Chicago}
       DB_HOST: db
       DB_PORT: ${DB_PORT:-3306}
       DB_NAME: ${DB_NAME:-librenms}
@@ -59,7 +59,7 @@ services:
       - db
       - redis
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-America/Chicago}
       SIDECAR_DISPATCHER: "1"
       DISPATCHER_NODE_ID: dispatcher1
       DB_HOST: db
