@@ -1084,7 +1084,7 @@ librenms_poller_deploy() {
   container_name="$LIBRENMS_POLLER_CONTAINER_NAME"
   image_name="$LIBRENMS_POLLER_IMAGE"
   node_id="$(hostname -s)-poller"
-  tz="UTC"
+  tz="America/Chicago"
   db_host="$LIBRENMS_POLLER_DB_HOST"
   db_port="3306"
   db_name="$LIBRENMS_POLLER_DB_NAME"
@@ -1114,7 +1114,7 @@ librenms_poller_deploy() {
 
   read -r -p "TZ [${tz}]: " tz
   tz="$(trim "$tz")"
-  [[ -n "$tz" ]] || tz="UTC"
+  [[ -n "$tz" ]] || tz="America/Chicago"
 
   read -r -p "Poller group [${poller_group}]: " poller_group
   poller_group="$(trim "$poller_group")"
