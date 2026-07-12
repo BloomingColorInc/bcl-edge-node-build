@@ -11,6 +11,7 @@ EDGE_NODE_OPS_DASHBOARD_CLEAR="${EDGE_NODE_OPS_DASHBOARD_CLEAR:-1}"
 EDGE_NODE_OPS_PANEL_SPACING_LINES="${EDGE_NODE_OPS_PANEL_SPACING_LINES:-1}"
 LIBRENMS_POLLER_CONTAINER_NAME="${LIBRENMS_POLLER_CONTAINER_NAME:-librenms-dispatcher-agent}"
 LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-librenms/librenms:26.3.1}"
+LIBRENMS_POLLER_GROUP="${LIBRENMS_POLLER_GROUP:-1}"
 MAIN_MENU_REQUESTED=0
 
 if [[ -t 0 ]]; then
@@ -1047,11 +1048,34 @@ librenms_poller_deploy() {
     return
   fi
 
-  local container_name image_name node_id tz
+  local container_name image_name node_id tz poller_group
   local db_host db_port db_name db_user db_password
   local redis_host redis_port
   local use_host_network network_mode_args=()
   local db_reachable="yes" redis_reachable="yes"
+  local arg=""
+
+  poller_group="$LIBRENMS_POLLER_GROUP"
+
+  while (( $# > 0 )); do
+    arg="$1"
+    case "$arg" in
+      --poller-group|-g)
+        shift
+        if (( $# == 0 )); then
+          fail "Missing value for --poller-group"
+          return 1
+        fi
+        poller_group="$(trim "$1")"
+        ;;
+      *)
+        fail "Unknown option for poller deploy: $arg"
+        echo "Usage: bash scripts/edge-node-ops.sh poller-deploy [--poller-group <number>]"
+        return 1
+        ;;
+    esac
+    shift
+  done
 
   container_name="$LIBRENMS_POLLER_CONTAINER_NAME"
   image_name="$LIBRENMS_POLLER_IMAGE"
@@ -1083,6 +1107,10 @@ librenms_poller_deploy() {
   read -r -p "TZ [${tz}]: " tz
   tz="$(trim "$tz")"
   [[ -n "$tz" ]] || tz="UTC"
+
+  read -r -p "Poller group [${poller_group}]: " poller_group
+  poller_group="$(trim "$poller_group")"
+  [[ -n "$poller_group" ]] || poller_group="$LIBRENMS_POLLER_GROUP"
 
   read -r -p "AWS Triad LibreNMS DB_HOST: " db_host
   db_host="$(trim "$db_host")"
@@ -1118,6 +1146,11 @@ librenms_poller_deploy() {
 
   if ! [[ "$db_port" =~ ^[0-9]+$ ]] || ! [[ "$redis_port" =~ ^[0-9]+$ ]]; then
     warn "DB_PORT and REDIS_PORT must be numeric values."
+    return
+  fi
+
+  if ! [[ "$poller_group" =~ ^[0-9]+$ ]]; then
+    warn "Poller group must be numeric."
     return
   fi
 
@@ -1173,6 +1206,7 @@ librenms_poller_deploy() {
     "${network_mode_args[@]}" \
     -e TZ="$tz" \
     -e SIDECAR_DISPATCHER="1" \
+    -e SIDECAR_GROUP="$poller_group" \
     -e DISPATCHER_NODE_ID="$node_id" \
     -e DB_HOST="$db_host" \
     -e DB_PORT="$db_port" \
@@ -1185,6 +1219,7 @@ librenms_poller_deploy() {
     "$image_name" >/dev/null
 
   LIBRENMS_POLLER_CONTAINER_NAME="$container_name"
+  LIBRENMS_POLLER_GROUP="$poller_group"
   ok "LibreNMS poller agent deployed."
   run_with_privilege docker ps -a --filter "name=${LIBRENMS_POLLER_CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
@@ -1535,6 +1570,7 @@ main_menu() {
 
 run_cli_command() {
   local cmd="${1:-}"
+  shift || true
 
   case "${cmd}" in
     menu)
@@ -1552,6 +1588,9 @@ run_cli_command() {
     diagnostics|desktop-diagnostics)
       collect_desktop_chrome_diagnostics
       ;;
+    poller-deploy)
+      librenms_poller_deploy "$@"
+      ;;
     *)      fail "Unknown command: ${cmd}"
       echo "Usage:"
       echo "  bash scripts/edge-node-ops.sh                     # interactive menu"
@@ -1560,13 +1599,14 @@ run_cli_command() {
       echo "  bash scripts/edge-node-ops.sh network-report      # network interface report"
       echo "  bash scripts/edge-node-ops.sh network-report-save # save network report to diagnostics"
       echo "  bash scripts/edge-node-ops.sh diagnostics         # desktop/chrome diagnostics"
+      echo "  bash scripts/edge-node-ops.sh poller-deploy --poller-group 1"
       return 1      ;;
   esac
 }
 
 if (( $# > 0 )); then
   check_required_files
-  run_cli_command "$1"
+  run_cli_command "$@"
 else
   main_menu
 fi

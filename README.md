@@ -2,6 +2,8 @@
 
 > **READ FIRST:** Read through the entire document before attempting any of the steps so you understand the full workflow, prerequisites, and manual follow-up items. This guide assumes you will use SSH for remote management after the initial OS installation.
 
+Operational quick procedures are also maintained in [RUNBOOKS.md](RUNBOOKS.md).
+
 ## Zero-Trust VPN Routing + Remote Access + System Monitoring Platform
 
 ![BloomingEdge Network](img/BloomingEdge_Network.png)
@@ -442,6 +444,20 @@ Use when troubleshooting:
 * Wallpaper or display issues
 * Chrome sandbox or permission errors
 
+### Poller Deploy (CLI)
+
+Deploy or redeploy the distributed poller directly from CLI:
+
+```bash
+bash scripts/edge-node-ops.sh poller-deploy --poller-group 1
+```
+
+Aliases:
+* `--poller-group <number>`
+* `-g <number>`
+
+If omitted, the default poller group is `1`.
+
 ---
 
 # 7. Configure Networking
@@ -571,7 +587,7 @@ sudo bash scripts/edge-node-ops.sh
 
 Menu path:
 
-1. `4) LibreNMS Poller Agent`
+1. `5) LibreNMS Poller Agent`
 2. `2) Deploy/Re-Deploy Poller Agent`
 
 During deployment, provide the AWS Triad LibreNMS backend values:
@@ -579,8 +595,38 @@ During deployment, provide the AWS Triad LibreNMS backend values:
 * `DB_HOST` / `DB_PORT`
 * `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 * `REDIS_HOST` / `REDIS_PORT` (`REDIS_HOST` can be left blank to reuse `DB_HOST` when Redis is on the same server)
+* `Poller group` (default `1`)
 
-The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:latest` with distributed dispatcher mode enabled.
+The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:26.3.1` with distributed dispatcher mode enabled.
+
+## Poller Group Assignment Standard
+
+Use non-zero poller groups for edge nodes so Triad does not compete for the same device checks.
+
+Recommended site mapping:
+
+* `0` = Triad/core only (do not assign edge-only devices here)
+* `1` = LOM edge site
+* `2` = LOU edge site
+* `3` = Next edge site (assign this to your next site code)
+
+Operational rule:
+
+* Devices on edge subnets should be assigned to that edge site's non-zero group.
+* The edge poller container should run with the matching `SIDECAR_GROUP` value.
+* Avoid leaving edge devices in poller group `0`, which can cause status flapping if Triad cannot reach the subnet.
+
+### Triad Console Configuration (Required)
+
+Configure poller groups in the AWS Triad LibreNMS web console so only one polling domain owns each edge subnet.
+
+1. In Triad LibreNMS, create poller groups for each edge site (for example `1=LOM`, `2=LOU`, `3=<next-site>`).
+2. Keep group `0` reserved for Triad/core-reachable devices only.
+3. Edit each edge device and set `Poller Group` to the matching non-zero site group.
+4. Confirm the edge poller at that site is deployed with the same group value (`SIDECAR_GROUP`).
+5. Do not assign edge devices to group `0`, and do not mix the same edge subnet across multiple groups.
+
+If menu names differ in your LibreNMS build, use the device edit page and poller-group fields as the source of truth.
 
 ## How It Talks to AWS Triad LibreNMS/SNMP
 
@@ -684,6 +730,8 @@ LibreNMS in AWS to BloomingEdge:
 1. In AWS LibreNMS, add each BloomingEdge node as a device using its NetBird IP address and SNMP credentials.
 2. Assign each node to site groups so alert routing and maintenance windows can be managed per location.
 3. If you are using distributed pollers, map the correct poller group to each site and ensure NetBird policies allow poller-to-device SNMP paths.
+  * In practice: Triad/core devices stay in group `0`; LOM devices use group `1`; LOU devices use group `2`; next site uses group `3`.
+  * Verify each edge poller container uses the matching `SIDECAR_GROUP` value from its deployment wizard/CLI.
 4. Add service checks for internal stack endpoints you want AWS to track (for example Portainer Server reachability or application health URLs on the edge host).
 5. Validate by running discovery and polling, then confirm graphs and alerts populate for both the host and selected internal services.
 
