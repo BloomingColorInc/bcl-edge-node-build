@@ -12,6 +12,10 @@ EDGE_NODE_OPS_PANEL_SPACING_LINES="${EDGE_NODE_OPS_PANEL_SPACING_LINES:-1}"
 LIBRENMS_POLLER_CONTAINER_NAME="${LIBRENMS_POLLER_CONTAINER_NAME:-librenms-dispatcher-agent}"
 LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-librenms/librenms:26.3.1}"
 LIBRENMS_POLLER_GROUP="${LIBRENMS_POLLER_GROUP:-1}"
+LIBRENMS_POLLER_DB_HOST="${LIBRENMS_POLLER_DB_HOST:-nms.triad.aws.internal.bloomingcolor.com}"
+LIBRENMS_POLLER_DB_NAME="${LIBRENMS_POLLER_DB_NAME:-librenms}"
+LIBRENMS_POLLER_DB_USER="${LIBRENMS_POLLER_DB_USER:-librenms}"
+LIBRENMS_POLLER_REDIS_HOST="${LIBRENMS_POLLER_REDIS_HOST:-nms.triad.aws.internal.bloomingcolor.com}"
 MAIN_MENU_REQUESTED=0
 
 if [[ -t 0 ]]; then
@@ -1081,7 +1085,11 @@ librenms_poller_deploy() {
   image_name="$LIBRENMS_POLLER_IMAGE"
   node_id="$(hostname -s)-poller"
   tz="UTC"
+  db_host="$LIBRENMS_POLLER_DB_HOST"
   db_port="3306"
+  db_name="$LIBRENMS_POLLER_DB_NAME"
+  db_user="$LIBRENMS_POLLER_DB_USER"
+  redis_host="$LIBRENMS_POLLER_REDIS_HOST"
   redis_port="6379"
   use_host_network="yes"
 
@@ -1112,26 +1120,29 @@ librenms_poller_deploy() {
   poller_group="$(trim "$poller_group")"
   [[ -n "$poller_group" ]] || poller_group="$LIBRENMS_POLLER_GROUP"
 
-  read -r -p "AWS Triad LibreNMS DB_HOST: " db_host
+  read -r -p "AWS Triad LibreNMS DB_HOST [${db_host}]: " db_host
   db_host="$(trim "$db_host")"
+  [[ -n "$db_host" ]] || db_host="$LIBRENMS_POLLER_DB_HOST"
 
   read -r -p "DB_PORT [${db_port}]: " db_port
   db_port="$(trim "$db_port")"
   [[ -n "$db_port" ]] || db_port="3306"
 
-  read -r -p "DB_NAME: " db_name
+  read -r -p "DB_NAME [${db_name}]: " db_name
   db_name="$(trim "$db_name")"
+  [[ -n "$db_name" ]] || db_name="$LIBRENMS_POLLER_DB_NAME"
 
-  read -r -p "DB_USER: " db_user
+  read -r -p "DB_USER [${db_user}]: " db_user
   db_user="$(trim "$db_user")"
+  [[ -n "$db_user" ]] || db_user="$LIBRENMS_POLLER_DB_USER"
 
   read -r -s -p "DB_PASSWORD: " db_password
   echo
   db_password="$(trim "$db_password")"
 
-  read -r -p "AWS Triad Redis REDIS_HOST [same as DB_HOST]: " redis_host
+  read -r -p "AWS Triad Redis REDIS_HOST [${redis_host}]: " redis_host
   redis_host="$(trim "$redis_host")"
-  [[ -n "$redis_host" ]] || redis_host="$db_host"
+  [[ -n "$redis_host" ]] || redis_host="$LIBRENMS_POLLER_REDIS_HOST"
 
   read -r -p "REDIS_PORT [${redis_port}]: " redis_port
   redis_port="$(trim "$redis_port")"
