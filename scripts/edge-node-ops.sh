@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+REPO_ENV_FILE="${REPO_ROOT}/.env"
+REPO_ENV_EXAMPLE_FILE="${REPO_ROOT}/env_example.txt"
 COMPOSE_FILE="${COMPOSE_FILE:-$REPO_ROOT/docker-compose.yml}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-edge-node}"
 BOOTSTRAP_SCRIPT="${BOOTSTRAP_SCRIPT:-$REPO_ROOT/scripts/bootstrap-edge-node.sh}"
@@ -11,11 +13,17 @@ EDGE_NODE_OPS_DASHBOARD_CLEAR="${EDGE_NODE_OPS_DASHBOARD_CLEAR:-1}"
 EDGE_NODE_OPS_PANEL_SPACING_LINES="${EDGE_NODE_OPS_PANEL_SPACING_LINES:-1}"
 LIBRENMS_POLLER_CONTAINER_NAME="${LIBRENMS_POLLER_CONTAINER_NAME:-librenms-dispatcher-agent}"
 LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-librenms/librenms:26.3.1}"
+LIBRENMS_IMAGE="${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}"
+MARIADB_IMAGE="${MARIADB_IMAGE:-mariadb:10.11.16}"
+REDIS_IMAGE="${REDIS_IMAGE:-redis:7.4.8-alpine}"
 LIBRENMS_POLLER_GROUP="${LIBRENMS_POLLER_GROUP:-1}"
-LIBRENMS_POLLER_DB_HOST="${LIBRENMS_POLLER_DB_HOST:-nms.triad.aws.internal.bloomingcolor.com}"
+LIBRENMS_POLLER_CENTRAL_HOST="${LIBRENMS_POLLER_CENTRAL_HOST:-nms.triad.aws.internal.bloomingcolor.com}"
+LIBRENMS_POLLER_DB_HOST="${LIBRENMS_POLLER_DB_HOST:-$LIBRENMS_POLLER_CENTRAL_HOST}"
 LIBRENMS_POLLER_DB_NAME="${LIBRENMS_POLLER_DB_NAME:-librenms}"
 LIBRENMS_POLLER_DB_USER="${LIBRENMS_POLLER_DB_USER:-librenms}"
-LIBRENMS_POLLER_REDIS_HOST="${LIBRENMS_POLLER_REDIS_HOST:-nms.triad.aws.internal.bloomingcolor.com}"
+LIBRENMS_POLLER_REDIS_HOST="${LIBRENMS_POLLER_REDIS_HOST:-$LIBRENMS_POLLER_CENTRAL_HOST}"
+LIBRENMS_POLLER_RRDCACHED_ENDPOINT="${LIBRENMS_POLLER_RRDCACHED_ENDPOINT:-${LIBRENMS_POLLER_CENTRAL_HOST}:42217}"
+LIBRENMS_RRDCACHED_ENDPOINT="${LIBRENMS_RRDCACHED_ENDPOINT:-$LIBRENMS_POLLER_RRDCACHED_ENDPOINT}"
 MAIN_MENU_REQUESTED=0
 
 if [[ -t 0 ]]; then
@@ -413,9 +421,9 @@ run_compose() {
   fi
 
   if [[ "$COMPOSE_CMD" == "docker compose" ]]; then
-    run_with_privilege docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
+    run_with_privilege env LIBRENMS_RRDCACHED_ENDPOINT="$LIBRENMS_RRDCACHED_ENDPOINT" docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
   else
-    run_with_privilege docker-compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
+    run_with_privilege env LIBRENMS_RRDCACHED_ENDPOINT="$LIBRENMS_RRDCACHED_ENDPOINT" docker-compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
   fi
 }
 
@@ -424,6 +432,117 @@ check_required_files() {
     fail "Bootstrap script not found at: $BOOTSTRAP_SCRIPT"
     exit 1
   fi
+
+  if [[ ! -f "$REPO_ENV_EXAMPLE_FILE" ]]; then
+    return
+  fi
+
+  if [[ ! -f "$REPO_ENV_FILE" ]]; then
+    cp "$REPO_ENV_EXAMPLE_FILE" "$REPO_ENV_FILE"
+    chmod 600 "$REPO_ENV_FILE" 2>/dev/null || true
+    ok "Initialized $REPO_ENV_FILE from env_example.txt"
+  fi
+
+  local merged_env_file=""
+  merged_env_file="$(mktemp)"
+
+  awk '
+    NR == FNR {
+      if (match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=/, key_match)) {
+        key = key_match[1]
+        template_line[key] = $0
+        if (!(key in template_order_seen)) {
+          template_order[++template_order_count] = key
+          template_order_seen[key] = 1
+        }
+      }
+      next
+    }
+
+    {
+      if (match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=/, key_match)) {
+        key = key_match[1]
+        if (key in template_line) {
+          print template_line[key]
+          merged_key_seen[key] = 1
+          next
+        }
+      }
+      print $0
+    }
+
+    END {
+      for (idx = 1; idx <= template_order_count; idx++) {
+        key = template_order[idx]
+        if (!(key in merged_key_seen)) {
+          print template_line[key]
+        }
+      }
+    }
+  ' "$REPO_ENV_EXAMPLE_FILE" "$REPO_ENV_FILE" > "$merged_env_file"
+
+  if cmp -s "$REPO_ENV_FILE" "$merged_env_file"; then
+    rm -f "$merged_env_file"
+  else
+    mv "$merged_env_file" "$REPO_ENV_FILE"
+    chmod 600 "$REPO_ENV_FILE" 2>/dev/null || true
+    ok "Merged env_example.txt updates into $REPO_ENV_FILE"
+  fi
+}
+
+edge_repo_update() {
+  if ! command_exists git; then
+    warn "git is not installed"
+    return 1
+  fi
+
+  if [[ ! -d "$REPO_ROOT/.git" ]]; then
+    warn "Repository metadata not found at: $REPO_ROOT/.git"
+    return 1
+  fi
+
+  local -a git_cmd=()
+  local current_branch=""
+  local current_commit=""
+  local new_commit=""
+  local dirty_state=""
+
+  if [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" ]]; then
+    git_cmd=(sudo -u "$SUDO_USER" git -C "$REPO_ROOT")
+  else
+    git_cmd=(git -C "$REPO_ROOT")
+  fi
+
+  current_branch="$("${git_cmd[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  current_commit="$("${git_cmd[@]}" rev-parse --short HEAD 2>/dev/null || true)"
+
+  if [[ -z "$current_branch" || "$current_branch" == "HEAD" ]]; then
+    warn "Repository is in detached HEAD state. Checkout a branch before updating."
+    return 1
+  fi
+
+  dirty_state="$("${git_cmd[@]}" status --porcelain 2>/dev/null || true)"
+  if [[ -n "$dirty_state" ]]; then
+    warn "Working tree has local changes in $REPO_ROOT."
+    if ! confirm "Continue with fetch/pull anyway?"; then
+      warn "Cancelled."
+      return 0
+    fi
+  fi
+
+  say "Updating edge-node repository (${current_branch})..."
+  if ! "${git_cmd[@]}" fetch --all --prune; then
+    fail "git fetch failed."
+    return 1
+  fi
+
+  if ! "${git_cmd[@]}" pull --ff-only origin "$current_branch"; then
+    fail "git pull failed. Resolve branch divergence or local conflicts first."
+    return 1
+  fi
+
+  new_commit="$("${git_cmd[@]}" rev-parse --short HEAD 2>/dev/null || true)"
+  ok "Repository update complete: ${current_branch} ${current_commit:-unknown} -> ${new_commit:-unknown}"
 }
 
 require_tool() {
@@ -1054,7 +1173,7 @@ librenms_poller_deploy() {
 
   local container_name image_name node_id tz poller_group
   local db_host db_port db_name db_user db_password
-  local redis_host redis_port
+  local redis_host redis_port rrdcached_endpoint
   local use_host_network network_mode_args=()
   local db_reachable="yes" redis_reachable="yes"
   local arg=""
@@ -1091,6 +1210,7 @@ librenms_poller_deploy() {
   db_user="$LIBRENMS_POLLER_DB_USER"
   redis_host="$LIBRENMS_POLLER_REDIS_HOST"
   redis_port="6379"
+  rrdcached_endpoint="$LIBRENMS_POLLER_RRDCACHED_ENDPOINT"
   use_host_network="yes"
 
   ui_clear
@@ -1144,6 +1264,10 @@ librenms_poller_deploy() {
   redis_host="$(trim "$redis_host")"
   [[ -n "$redis_host" ]] || redis_host="$LIBRENMS_POLLER_REDIS_HOST"
 
+  read -r -p "RRDCACHED endpoint [${rrdcached_endpoint}]: " rrdcached_endpoint
+  rrdcached_endpoint="$(trim "$rrdcached_endpoint")"
+  [[ -n "$rrdcached_endpoint" ]] || rrdcached_endpoint="$LIBRENMS_POLLER_RRDCACHED_ENDPOINT"
+
   read -r -p "REDIS_PORT [${redis_port}]: " redis_port
   redis_port="$(trim "$redis_port")"
   [[ -n "$redis_port" ]] || redis_port="6379"
@@ -1152,6 +1276,11 @@ librenms_poller_deploy() {
 
   if [[ -z "$db_host" || -z "$db_name" || -z "$db_user" || -z "$db_password" ]]; then
     warn "DB_HOST, DB_NAME, DB_USER, and DB_PASSWORD are required."
+    return
+  fi
+
+  if [[ -z "$rrdcached_endpoint" ]]; then
+    warn "RRDCACHED endpoint is required."
     return
   fi
 
@@ -1226,6 +1355,7 @@ librenms_poller_deploy() {
     -e DB_PASSWORD="$db_password" \
     -e REDIS_HOST="$redis_host" \
     -e REDIS_PORT="$redis_port" \
+    -e RRDCACHED="$rrdcached_endpoint" \
     -v /opt/librenms:/data \
     "$image_name" >/dev/null
 
@@ -1558,7 +1688,8 @@ main_menu() {
       "7) Run Bootstrap in Repair Mode" \
       "8) Collect Desktop/Chrome Diagnostics" \
       "9) Network Interface Report" \
-      "10) Save Network Interface Report"
+      "10) Save Network Interface Report" \
+      "11) Update Edge Repo (git fetch + pull)"
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
     local choice
@@ -1574,6 +1705,7 @@ main_menu() {
       8) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
       9) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
       10) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
+      11) if ! edge_repo_update; then warn "Repository update failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
     esac  done
@@ -1602,6 +1734,9 @@ run_cli_command() {
     poller-deploy)
       librenms_poller_deploy "$@"
       ;;
+    repo-update|repo-sync|repo-pull)
+      edge_repo_update
+      ;;
     *)      fail "Unknown command: ${cmd}"
       echo "Usage:"
       echo "  bash scripts/edge-node-ops.sh                     # interactive menu"
@@ -1611,6 +1746,7 @@ run_cli_command() {
       echo "  bash scripts/edge-node-ops.sh network-report-save # save network report to diagnostics"
       echo "  bash scripts/edge-node-ops.sh diagnostics         # desktop/chrome diagnostics"
       echo "  bash scripts/edge-node-ops.sh poller-deploy --poller-group 1"
+      echo "  bash scripts/edge-node-ops.sh repo-update         # git fetch + pull current branch"
       return 1      ;;
   esac
 }

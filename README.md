@@ -29,6 +29,8 @@ Primary functions:
 * Maintenance Automation
 * Emergency GUI Administration
 
+When the node is used as a LibreNMS poller, it should point `RRDCACHED` at the central Triad LibreNMS host so graph data is written to the shared RRD set rather than only to the edge node.
+
 High Availability is provided by retaining existing NetBird Routing Peers as secondary routing peers.
 
 ---
@@ -215,7 +217,7 @@ From the cloned repository, launch the menu:
 bash scripts/edge-node-ops.sh
 ```
 
-Use option `1) Run Bootstrap Wizard` for normal provisioning. Use option `5) Run Bootstrap in Repair Mode` when you need to re-apply desktop, XRDP, NetBird, or Portainer-related configuration.
+Use option `1) Run Bootstrap Wizard` for normal provisioning. Use option `7) Run Bootstrap in Repair Mode` when you need to re-apply desktop, XRDP, NetBird, or Portainer-related configuration.
 
 The menu is the preferred path because it gives you a guided bootstrap workflow, shows live node state before and after provisioning, and provides a built-in quick health check once bootstrap completes.
 
@@ -258,6 +260,17 @@ bash scripts/bootstrap-edge-node.sh
 ```
 
 `NETBIRD_SETUP_KEY` should contain that one-off key copied from the NetBird dashboard. Pass it in as an environment variable when you start the script; do not store it in the repository.
+
+### Repository `.env` Auto-Initialization and Sync
+
+When either bootstrap path runs (`scripts/bootstrap-edge-node.sh` directly or through `scripts/edge-node-ops.sh`), the repository environment file is managed automatically:
+
+* If `.env` is missing and `env_example.txt` exists, `.env` is created from `env_example.txt`.
+* If `.env` already exists, keys from `env_example.txt` are merged into `.env`.
+* Updated keys in `env_example.txt` replace matching keys in `.env`.
+* New keys in `env_example.txt` are appended to `.env`.
+
+This keeps required environment variables aligned with template changes while preserving the rest of your local `.env` content.
 
 Each bootstrap run now logs full output to:
 
@@ -595,7 +608,14 @@ During deployment, provide the AWS Triad LibreNMS backend values:
 * `DB_HOST` / `DB_PORT`
 * `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 * `REDIS_HOST` / `REDIS_PORT` (`REDIS_HOST` can be left blank to reuse `DB_HOST` when Redis is on the same server)
+* `RRDCACHED endpoint` (defaults to `<central-host>:42217`)
 * `Poller group` (default `1`)
+
+Environment defaults for deploy/redeploy:
+
+* `LIBRENMS_POLLER_CENTRAL_HOST` sets the shared central Triad hostname for DB/Redis defaults.
+* `LIBRENMS_POLLER_RRDCACHED_ENDPOINT` overrides the default RRDCACHED endpoint.
+* `LIBRENMS_RRDCACHED_ENDPOINT` is required for compose stack actions (`up/restart/pull`) and is exported by `edge-node-ops.sh`.
 
 The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:26.3.1` with distributed dispatcher mode enabled.
 
@@ -677,11 +697,9 @@ The repository includes a Docker Compose stack for:
 * Redis (`redis`)
 * Portainer Server (`portainer`)
 
-Set strong database credentials before launching the stack:
+Set strong credentials and host values in the repository `.env` before launching the stack.
 
-```bash
-export DB_PASSWORD='<strong-db-password>'
-```
+If `.env` does not exist yet, run either bootstrap path once and it will be created from `env_example.txt` automatically.
 
 Then start the stack from the repository root:
 

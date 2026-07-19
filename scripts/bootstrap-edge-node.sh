@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ENV_FILE="$REPO_ROOT/.env"
+REPO_ENV_EXAMPLE_FILE="$REPO_ROOT/env_example.txt"
 
 DEFAULT_ADMIN_USER="${SUDO_USER:-netadmin}"
 ADMIN_USER="${EDGE_ADMIN_USER:-$DEFAULT_ADMIN_USER}"
@@ -68,6 +70,71 @@ GOOGLE_CHROME_REPO_DISABLED="no"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+ensure_repo_env_file() {
+  local merged_env_file=""
+
+  if [[ ! -f "$REPO_ENV_EXAMPLE_FILE" ]]; then
+    log "No env_example.txt found at $REPO_ENV_EXAMPLE_FILE; skipping .env initialization"
+    return
+  fi
+
+  if [[ ! -f "$REPO_ENV_FILE" ]]; then
+    cp "$REPO_ENV_EXAMPLE_FILE" "$REPO_ENV_FILE"
+    chmod 600 "$REPO_ENV_FILE" 2>/dev/null || true
+    log "Created repository .env from template: $REPO_ENV_FILE"
+  else
+    log "Repository .env already present: $REPO_ENV_FILE"
+  fi
+
+  merged_env_file="$(mktemp)"
+
+  awk '
+    NR == FNR {
+      if (match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=/, key_match)) {
+        key = key_match[1]
+        template_line[key] = $0
+        if (!(key in template_order_seen)) {
+          template_order[++template_order_count] = key
+          template_order_seen[key] = 1
+        }
+      }
+      next
+    }
+
+    {
+      if (match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=/, key_match)) {
+        key = key_match[1]
+        if (key in template_line) {
+          print template_line[key]
+          merged_key_seen[key] = 1
+          next
+        }
+      }
+      print $0
+    }
+
+    END {
+      for (idx = 1; idx <= template_order_count; idx++) {
+        key = template_order[idx]
+        if (!(key in merged_key_seen)) {
+          print template_line[key]
+        }
+      }
+    }
+  ' "$REPO_ENV_EXAMPLE_FILE" "$REPO_ENV_FILE" > "$merged_env_file"
+
+  if cmp -s "$REPO_ENV_FILE" "$merged_env_file"; then
+    rm -f "$merged_env_file"
+    log "Repository .env already synchronized with env_example.txt"
+  else
+    mv "$merged_env_file" "$REPO_ENV_FILE"
+    chmod 600 "$REPO_ENV_FILE" 2>/dev/null || true
+    log "Merged env_example.txt updates into $REPO_ENV_FILE"
+  fi
+
+  log "Review and update .env values as needed for this site."
 }
 
 repair_google_chrome_repo_key() {
@@ -1001,6 +1068,9 @@ main() {
 
   print_banner "BOOTSTRAP START" "Copyright (c) 2026 Blooming Color, Inc. All rights reserved."
   show_mode_summary
+
+  print_banner "ENVIRONMENT FILE INITIALIZATION"
+  ensure_repo_env_file
 
   print_banner "APT UPDATE AND UPGRADE"
   run_apt_update

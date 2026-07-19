@@ -2,7 +2,7 @@ services:
   db:
     profiles:
       - local-stack
-    image: mariadb:10.11
+    image: ${MARIADB_IMAGE:-mariadb:10.11.16}
     container_name: librenms-db
     restart: unless-stopped
     command:
@@ -21,14 +21,14 @@ services:
   redis:
     profiles:
       - local-stack
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7.4.8-alpine}
     container_name: librenms-redis
     restart: unless-stopped
 
   librenms:
     profiles:
       - local-stack
-    image: librenms/librenms:latest
+    image: ${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}
     container_name: librenms
     restart: unless-stopped
     depends_on:
@@ -45,13 +45,14 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-change-me}
       REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT:-6379}
+      RRDCACHED: ${LIBRENMS_RRDCACHED_ENDPOINT:?Set LIBRENMS_RRDCACHED_ENDPOINT to the central Triad RRDCached host:port}
     volumes:
       - librenms-data:/data
 
   dispatcher:
     profiles:
       - local-stack
-    image: librenms/librenms:latest
+    image: ${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}
     container_name: librenms-dispatcher
     restart: unless-stopped
     depends_on:
@@ -69,6 +70,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-change-me}
       REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT:-6379}
+      RRDCACHED: ${LIBRENMS_RRDCACHED_ENDPOINT:?Set LIBRENMS_RRDCACHED_ENDPOINT to the central Triad RRDCached host:port}
     volumes:
       - librenms-data:/data
 

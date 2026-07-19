@@ -1,0 +1,43 @@
+# Blooming Color - Edge Node (for LibreNMS Poller)
+TZ=America/Chicago
+
+# ----------------------------
+# Local Stack (local-stack profile)
+# Database credentials for local LibreNMS stack (when running `docker compose up -p local-stack`)
+# ----------------------------
+DB_NAME=librenms
+DB_USER=librenms
+DB_PASSWORD=change-me
+DB_PORT=3306
+REDIS_PORT=6379
+
+# RRDCached endpoint on central Triad server (required for local-stack profile)
+LIBRENMS_RRDCACHED_ENDPOINT=nms.triad.aws.internal.bloomingcolor.com:42217
+
+# ----------------------------
+# Remote Poller Deployment
+# Central LibreNMS server coordinates (for remote poller docker run)
+# ----------------------------
+LIBRENMS_POLLER_CENTRAL_HOST=nms.triad.aws.internal.bloomingcolor.com
+LIBRENMS_POLLER_DB_HOST=nms.triad.aws.internal.bloomingcolor.com
+LIBRENMS_POLLER_DB_NAME=librenms
+LIBRENMS_POLLER_DB_USER=librenms
+LIBRENMS_POLLER_DB_PORT=3306
+LIBRENMS_POLLER_REDIS_HOST=nms.triad.aws.internal.bloomingcolor.com
+LIBRENMS_POLLER_REDIS_PORT=6379
+LIBRENMS_POLLER_RRDCACHED_ENDPOINT=nms.triad.aws.internal.bloomingcolor.com:42217
+
+# Poller group assignment (1-based group ID on central LibreNMS)
+LIBRENMS_POLLER_GROUP=1
+
+# ----------------------------
+# Pinned Docker Image Versions
+# ----------------------------
+# Prevents unwanted version upgrades during 'docker compose pull' or 'docker build'.
+# Current versions as of deployment:
+#   LibreNMS: 26.3.1, MariaDB: 10.11.16, Redis: 7.4.8-alpine
+# Override any of these to change image versions on next deployment.
+
+LIBRENMS_IMAGE=${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}
+MARIADB_IMAGE=${MARIADB_IMAGE:-mariadb:10.11.16}
+REDIS_IMAGE=${REDIS_IMAGE:-redis:7.4.8-alpine}
