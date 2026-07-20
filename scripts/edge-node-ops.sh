@@ -1680,32 +1680,30 @@ main_menu() {
     show_node_snapshot_lines
     ui_panel "Main Actions" "bright_magenta" \
       "1) Run Bootstrap Wizard" \
-      "2) LibreNMS Stack Operations" \
+      "2) LibreNMS Poller Agent" \
       "3) Portainer Stack Operations" \
       "4) NetBird Operations" \
-      "5) LibreNMS Poller Agent" \
-      "6) Quick Health Check" \
-      "7) Run Bootstrap in Repair Mode" \
-      "8) Collect Desktop/Chrome Diagnostics" \
-      "9) Network Interface Report" \
-      "10) Save Network Interface Report" \
-      "11) Update Edge Repo (git fetch + pull)"
+      "5) Quick Health Check" \
+      "6) Run Bootstrap in Repair Mode" \
+      "7) Collect Desktop/Chrome Diagnostics" \
+      "8) Network Interface Report" \
+      "9) Save Network Interface Report" \
+      "10) Update Edge Repo (git fetch + pull)"
     ui_panel "Navigation" "bright_magenta" "q) Quit"
 
     local choice
     read -r -p "Select action > " choice
     case "$choice" in
       1) if ! run_bootstrap_wizard; then warn "Bootstrap wizard failed."; fi; pause ;;
-      2) librenms_stack_menu ;;
+      2) librenms_poller_menu ;;
       3) portainer_stack_menu ;;
       4) netbird_menu ;;
-      5) librenms_poller_menu ;;
-      6) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
-      7) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
-      8) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
-      9) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
-      10) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
-      11) if ! edge_repo_update; then warn "Repository update failed."; fi; pause ;;
+      5) if ! quick_health_check; then warn "Health check reported errors."; fi; pause ;;
+      6) if ! run_bootstrap_wizard yes; then warn "Repair bootstrap wizard failed."; fi; pause ;;
+      7) if ! collect_desktop_chrome_diagnostics; then warn "Diagnostics collection failed."; fi; pause ;;
+      8) if ! network_interface_report; then warn "Network interface report failed."; fi; pause ;;
+      9) if ! network_interface_report_save; then warn "Network report save failed."; fi; pause ;;
+      10) if ! edge_repo_update; then warn "Repository update failed."; fi; pause ;;
       q|Q) echo "Exiting edge-node-ops."; exit 0 ;;
       *) warn "Invalid choice"; pause ;;
     esac  done

@@ -217,7 +217,7 @@ From the cloned repository, launch the menu:
 bash scripts/edge-node-ops.sh
 ```
 
-Use option `1) Run Bootstrap Wizard` for normal provisioning. Use option `7) Run Bootstrap in Repair Mode` when you need to re-apply desktop, XRDP, NetBird, or Portainer-related configuration.
+Use option `1) Run Bootstrap Wizard` for normal provisioning. Use option `6) Run Bootstrap in Repair Mode` when you need to re-apply desktop, XRDP, NetBird, or Portainer-related configuration.
 
 The menu is the preferred path because it gives you a guided bootstrap workflow, shows live node state before and after provisioning, and provides a built-in quick health check once bootstrap completes.
 
@@ -600,7 +600,7 @@ sudo bash scripts/edge-node-ops.sh
 
 Menu path:
 
-1. `5) LibreNMS Poller Agent`
+1. `2) LibreNMS Poller Agent`
 2. `2) Deploy/Re-Deploy Poller Agent`
 
 During deployment, provide the AWS Triad LibreNMS backend values:
