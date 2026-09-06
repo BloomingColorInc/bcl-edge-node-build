@@ -28,7 +28,13 @@ services:
   librenms:
     profiles:
       - local-stack
-    image: ${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.librenms
+      args:
+        LIBRENMS_BASE_IMAGE: ${LIBRENMS_BASE_IMAGE:-librenms/librenms:26.3.1@sha256:822798a9d7fd033db5e22d6bc51d3d2db31a03d960ae8685f8692ab7a5e701e3}
+        NRPE_PLUGIN_VERSION: ${NRPE_PLUGIN_VERSION:-4.1.1-r0}
+    image: ${LIBRENMS_IMAGE:-bcl-librenms:26.3.1-nrpe}
     container_name: librenms
     restart: unless-stopped
     depends_on:
@@ -52,7 +58,13 @@ services:
   dispatcher:
     profiles:
       - local-stack
-    image: ${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}
+    build:
+      context: .
+      dockerfile: Dockerfile.librenms
+      args:
+        LIBRENMS_BASE_IMAGE: ${LIBRENMS_BASE_IMAGE:-librenms/librenms:26.3.1@sha256:822798a9d7fd033db5e22d6bc51d3d2db31a03d960ae8685f8692ab7a5e701e3}
+        NRPE_PLUGIN_VERSION: ${NRPE_PLUGIN_VERSION:-4.1.1-r0}
+    image: ${LIBRENMS_IMAGE:-bcl-librenms:26.3.1-nrpe}
     container_name: librenms-dispatcher
     restart: unless-stopped
     depends_on:

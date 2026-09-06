@@ -617,7 +617,7 @@ Environment defaults for deploy/redeploy:
 * `LIBRENMS_POLLER_RRDCACHED_ENDPOINT` overrides the default RRDCACHED endpoint.
 * `LIBRENMS_RRDCACHED_ENDPOINT` is required for compose stack actions (`up/restart/pull`) and is exported by `edge-node-ops.sh`.
 
-The CLI menu creates a poller container (`librenms-dispatcher-agent` by default) using `librenms/librenms:26.3.1` with distributed dispatcher mode enabled.
+The CLI menu builds the pinned local LibreNMS NRPE image (`bcl-librenms:26.3.1-nrpe` by default) and creates a poller container (`librenms-dispatcher-agent` by default) with distributed dispatcher mode enabled. The image is based on LibreNMS `26.3.1` and includes `nrpe-plugin` `4.1.1-r0`.
 
 ## Poller Group Assignment Standard
 

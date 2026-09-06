@@ -12,8 +12,10 @@ BOOTSTRAP_SCRIPT="${BOOTSTRAP_SCRIPT:-$REPO_ROOT/scripts/bootstrap-edge-node.sh}
 EDGE_NODE_OPS_DASHBOARD_CLEAR="${EDGE_NODE_OPS_DASHBOARD_CLEAR:-1}"
 EDGE_NODE_OPS_PANEL_SPACING_LINES="${EDGE_NODE_OPS_PANEL_SPACING_LINES:-1}"
 LIBRENMS_POLLER_CONTAINER_NAME="${LIBRENMS_POLLER_CONTAINER_NAME:-librenms-dispatcher-agent}"
-LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-librenms/librenms:26.3.1}"
-LIBRENMS_IMAGE="${LIBRENMS_IMAGE:-librenms/librenms:26.3.1}"
+LIBRENMS_POLLER_IMAGE="${LIBRENMS_POLLER_IMAGE:-bcl-librenms:26.3.1-nrpe}"
+LIBRENMS_IMAGE="${LIBRENMS_IMAGE:-bcl-librenms:26.3.1-nrpe}"
+LIBRENMS_BASE_IMAGE="${LIBRENMS_BASE_IMAGE:-librenms/librenms:26.3.1@sha256:822798a9d7fd033db5e22d6bc51d3d2db31a03d960ae8685f8692ab7a5e701e3}"
+NRPE_PLUGIN_VERSION="${NRPE_PLUGIN_VERSION:-4.1.1-r0}"
 MARIADB_IMAGE="${MARIADB_IMAGE:-mariadb:10.11.16}"
 REDIS_IMAGE="${REDIS_IMAGE:-redis:7.4.8-alpine}"
 LIBRENMS_POLLER_GROUP="${LIBRENMS_POLLER_GROUP:-1}"
@@ -1165,6 +1167,19 @@ librenms_poller_status() {
   run_with_privilege docker ps -a --filter "name=${LIBRENMS_POLLER_CONTAINER_NAME}" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 }
 
+build_librenms_image() {
+  local image_name="$1"
+
+  say "Building LibreNMS image ${image_name}..."
+  run_with_privilege docker build \
+    --pull \
+    --file "${REPO_ROOT}/Dockerfile.librenms" \
+    --build-arg "LIBRENMS_BASE_IMAGE=${LIBRENMS_BASE_IMAGE}" \
+    --build-arg "NRPE_PLUGIN_VERSION=${NRPE_PLUGIN_VERSION}" \
+    --tag "${image_name}" \
+    "${REPO_ROOT}"
+}
+
 librenms_poller_deploy() {
   if ! command_exists docker; then
     warn "docker CLI not installed"
@@ -1309,6 +1324,8 @@ librenms_poller_deploy() {
       return
     fi
   fi
+
+  build_librenms_image "$image_name"
 
   if [[ "$use_host_network" == "yes" ]]; then
     network_mode_args=(--network host)

@@ -1,0 +1,9 @@
+ARG LIBRENMS_BASE_IMAGE=librenms/librenms:26.3.1@sha256:822798a9d7fd033db5e22d6bc51d3d2db31a03d960ae8685f8692ab7a5e701e3
+FROM ${LIBRENMS_BASE_IMAGE}
+
+ARG NRPE_PLUGIN_VERSION=4.1.1-r0
+
+RUN apk add --no-cache "nrpe-plugin=${NRPE_PLUGIN_VERSION}" \
+    && mkdir -p /usr/lib/monitoring-plugins \
+    && ln -s /usr/lib/nagios/plugins/check_nrpe /usr/lib/monitoring-plugins/check_nrpe \
+    && test -x /usr/lib/monitoring-plugins/check_nrpe
